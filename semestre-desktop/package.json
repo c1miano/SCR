@@ -1,0 +1,51 @@
+{
+  "name": "semestre-desktop",
+  "productName": "SCR",
+  "version": "1.6.1",
+  "description": "Sistema de Controle de Registro",
+  "author": "Marcos",
+  "private": true,
+  "main": "main.cjs",
+  "scripts": {
+    "start": "electron .",
+    "test": "node test-engine.cjs && node test-store.cjs && node test-professors.cjs && node test-routine.cjs && node test-preview.cjs",
+    "build": "electron-builder --win nsis --x64"
+  },
+  "devDependencies": {
+    "electron": "44.7.2",
+    "electron-builder": "26.15.3"
+  },
+  "build": {
+    "appId": "br.com.semestre.desktop",
+    "productName": "SCR",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "main.cjs",
+      "smoke.cjs",
+      "ui/**/*",
+      "package.json"
+    ],
+    "asar": true,
+    "win": {
+      "target": "nsis",
+      "signAndEditExecutable": false,
+      "artifactName": "SCR-Instalador-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "SCR",
+      "deleteAppDataOnUninstall": false,
+      "runAfterFinish": false,
+      "installerLanguages": [
+        "pt_BR"
+      ],
+      "language": "1046"
+    }
+  }
+}

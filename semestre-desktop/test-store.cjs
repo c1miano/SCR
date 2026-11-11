@@ -1,0 +1,17 @@
+const assert=require('node:assert/strict');
+const {migrate,load,KEY}=require('./ui/store.js');
+const example={id:'exemplo',name:'Didática — exemplo',total:80,done:40,unit:50,start:'2026-10-14',end:'2026-12-18',schedule:{1:2,3:2},excluded:['2026-11-02'],extras:[]};
+assert.deepEqual(migrate(),{version:2,calendars:[],courses:[]});
+assert.equal(migrate([example]).courses.length,0);
+assert.equal(migrate([{...example,done:42}]).courses.length,1);
+const entry={id:'feriado',name:'Feriado',start:'2026-10-19',end:'2026-10-19',type:'holiday'};
+const user={...example,id:'real',name:'Disciplina real'};
+const data=migrate([example,user],[entry]);
+assert.equal(data.courses.length,1);assert.equal(data.courses[0].calendarId,data.calendars[0].id);
+assert.deepEqual(data.courses[0].excluded,user.excluded);assert.deepEqual(data.calendars[0].entries,[entry]);
+assert.equal(migrate([user]).courses[0].calendarId,'');
+const mem=new Map([['semestre-v1',JSON.stringify([user])],['semestre-calendar-v1',JSON.stringify([entry])]]);
+const storage={getItem:k=>mem.get(k)||null,setItem:(k,v)=>mem.set(k,v)};
+assert.deepEqual(load(storage),load(storage));assert.ok(mem.has('semestre-v1'));assert.ok(mem.has(KEY));
+mem.set(KEY,'invalid');assert.throws(()=>load(storage));assert.equal(mem.get(KEY),'invalid');
+console.log('13 verificações de migração e armazenamento aprovadas.');

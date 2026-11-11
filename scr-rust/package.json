@@ -1,0 +1,1 @@
+{"name":"scr-rust","version":"2.2.5","private":true,"scripts":{"dev":"tauri dev","build":"tauri build","test":"cargo test --manifest-path src-tauri/Cargo.toml"},"devDependencies":{"@tauri-apps/cli":"^2"}}

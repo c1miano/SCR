@@ -1,0 +1,22 @@
+# Dependências e builds
+node_modules/
+target/
+dist/
+release/
+.cache/
+
+# Perfis e dados de teste
+.test-*/
+
+# Dados pessoais e cópias de recuperação — nunca versionar
+**/backups-recuperacao/
+**/backup-atalhos-*/
+*.lnk
+
+# Saídas geradas (PDFs, prévias, resultados de verificação)
+output/
+scr-rust/tmp/
+scr-rust/verification.json.results.json
+
+# Repositório Git próprio (versão web legada)
+semestre/

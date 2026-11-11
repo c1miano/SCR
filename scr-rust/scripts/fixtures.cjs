@@ -1,0 +1,3 @@
+const fs=require('fs');const {forecast}=require('../../semestre-desktop/ui/engine.js');
+const cases=[];for(let i=0;i<120;i++){const c={id:'x',total:1+i%30,done:i%3,unit:[45,50,60][i%3],start:'2026-10-01',end:'2026-12-31',schedule:{1:2,2:1.5,3:2},excluded:['2026-10-05'],extras:[{date:'2026-10-09',hours:1.25}],completedLessons:i%2?[{day:'2026-10-06',minutes:100}]:[],scheduleMode:i%3?'fixed':'alternating',weekAnchor:'2026-10-05',scheduleB:{4:3},weekOverrides:[{weekStart:'2026-10-12',schedule:{5:2}}]};c.done=Math.min(c.done,c.total);cases.push({course:c,calendar:[{start:'2026-10-12',end:'2026-10-14'}]});}
+fs.writeFileSync('verification.json',JSON.stringify(cases));fs.writeFileSync('verification.expected.json',JSON.stringify(cases.map(x=>forecast(x.course,x.calendar))));
