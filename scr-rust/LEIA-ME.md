@@ -1,4 +1,4 @@
-# SCR 2.2.5 — Rust + Tauri
+# SCR 2.3.0 — Rust + Tauri
 
 O executável, o cálculo de carga horária e a persistência foram convertidos para Rust. A interface é HTML/CSS/JavaScript, preservada e conectada aos comandos Rust pelo Tauri 2. Não há Electron nem Node.js em execução no aplicativo distribuído. O Windows usa o WebView2 para exibir as telas.
 
@@ -90,7 +90,7 @@ Ausências e cancelamentos aparecem em laranja, com a observação cadastrada; f
 
 Cartões de ausência/cancelamento e feriado/dia não letivo exibem **Não registrar**, inclusive quando a observação continua em outro cartão. O aviso não é aplicado à aula extra que exista na mesma data. A indicação de conclusão prevista aparece em verde e negrito. Todas as páginas incluem legenda com amostras das seis cores, incluindo páginas de continuação e de observações. A paginação reserva espaço para a legenda e mantém os motivos completos.
 
-## Manutenção (após 2.2.5, ainda sem nova versão)
+## Manutenção — 2.3.0
 
 - **Disciplina inválida não bloqueia a abertura.** Um erro de cálculo em uma disciplina (carga ou datas inválidas) deixa só ela sem previsão, com o motivo no status (“Revisar cadastro: …”). Erros estruturais do arquivo continuam impedindo o carregamento.
 - **Arredondamento.** Resíduos de ponto flutuante abaixo de 0,000001 minuto são desconsiderados, evitando “Reposição necessária” indevida em cargas com frações de hora.
@@ -99,7 +99,7 @@ Cartões de ausência/cancelamento e feriado/dia não letivo exibem **Não regis
 - Removidos `ui/engine.js` e `ui/store.js`, que não eram carregados pela interface. A referência de cálculo da versão Electron continua em `semestre-desktop/ui/engine.js`.
 
 
-## Turmas e grade semanal (após 2.2.5)
+## Turmas e grade semanal — 2.3.0
 
 Menu **Turmas e grades**: cada turma tem uma grade semanal (aulas por dia × segunda a sábado), em que cada célula é uma aula de uma disciplina, na unidade da disciplina. A grade define os dias e a carga de cada disciplina nas previsões, na prévia e nos relatórios PDF.
 
