@@ -118,7 +118,16 @@ pub fn forecast(c: &V, cal: &V) -> Result<V, String> {
         json!({"remaining":remaining,"available":available,"deficit":(remaining-available).max(0.0),"finish":finish,"complete":remaining==0.0,"done":done,"taught":taught,"rows":rows.into_values().collect::<Vec<_>>()}),
     )
 }
+/// Calcula as previsões de todas as disciplinas.
+///
+/// Erros estruturais (versão, listas ausentes, identificadores repetidos)
+/// invalidam o arquivo inteiro. Um erro de cálculo em uma disciplina
+/// (carga ou datas inválidas) não impede o carregamento das demais: a
+/// previsão dela fica `null` e a mensagem vai para `issues`.
 pub fn projections(data: &V) -> Result<V, String> {
+    projections_with_issues(data).map(|(forecasts, _)| forecasts)
+}
+pub fn projections_with_issues(data: &V) -> Result<(V, V), String> {
     if data["version"] != 4
         || !data["courses"].is_array()
         || !data["calendars"].is_array()
@@ -127,6 +136,7 @@ pub fn projections(data: &V) -> Result<V, String> {
         return Err("Arquivo SCR inválido (esperado formato versão 4).".into());
     }
     let mut result = serde_json::Map::new();
+    let mut issues = serde_json::Map::new();
     let mut ids = HashSet::new();
     for course in array(&data["courses"]) {
         let id = text(&course["id"]);
@@ -164,9 +174,17 @@ pub fn projections(data: &V) -> Result<V, String> {
             }
         }
         c["extras"] = json!(extras);
-        result.insert(id.into(), forecast(&c, &json!(blocked))?);
+        match forecast(&c, &json!(blocked)) {
+            Ok(r) => {
+                result.insert(id.into(), r);
+            }
+            Err(e) => {
+                result.insert(id.into(), V::Null);
+                issues.insert(id.into(), json!(e));
+            }
+        }
     }
-    Ok(V::Object(result))
+    Ok((V::Object(result), V::Object(issues)))
 }
 #[cfg(test)]
 mod tests {
@@ -194,5 +212,25 @@ mod tests {
         let r = forecast(&c, &json!([])).unwrap();
         assert_eq!(r["rows"][1]["day"], "2026-10-27");
         assert_eq!(r["finish"], "2026-11-11");
+    }
+    #[test]
+    fn invalid_course_does_not_block_others() {
+        let data = json!({"version":4,"professors":[],
+        "calendars":[{"id":"cal","start":"2026-10-19","end":"2026-11-30","entries":[]}],
+        "courses":[
+            {"id":"ok","calendarId":"cal","total":5,"done":0,"unit":50,"schedule":{"1":2}},
+            {"id":"bad","calendarId":"cal","total":5,"done":9,"unit":50,"schedule":{"1":2}}
+        ]});
+        let (forecasts, issues) = projections_with_issues(&data).unwrap();
+        assert!(forecasts["ok"]["finish"].is_string());
+        assert!(forecasts["bad"].is_null());
+        assert_eq!(issues["bad"], "Carga horária inválida.");
+        assert!(issues.get("ok").is_none());
+    }
+    #[test]
+    fn structural_errors_remain_fatal() {
+        let data = json!({"version":4,"professors":[],"calendars":[],
+            "courses":[{"id":"a"},{"id":"a"}]});
+        assert!(projections(&data).is_err());
     }
 }

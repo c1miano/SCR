@@ -21,9 +21,9 @@ fn empty() -> Value {
     json!({"version":4,"calendars":[],"courses":[],"professors":[]})
 }
 fn envelope(data: Value) -> Result<Value, String> {
-    let forecasts = engine::projections(&data)?;
+    let (forecasts, issues) = engine::projections_with_issues(&data)?;
     Ok(
-        json!({"data":data,"forecasts":forecasts,"test":cfg!(debug_assertions)&&std::env::var("SCR_TEST_DIR").is_ok()}),
+        json!({"data":data,"forecasts":forecasts,"issues":issues,"test":cfg!(debug_assertions)&&std::env::var("SCR_TEST_DIR").is_ok()}),
     )
 }
 fn atomic(path: &Path, data: &Value) -> Result<(), String> {

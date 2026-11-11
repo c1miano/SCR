@@ -63,7 +63,9 @@ pub fn migrate(target: &Path, candidates: &[PathBuf]) -> Result<(), String> {
         temp.persist_noclobber(target).map_err(error)?;
         fs::write(parent.join("origem-dados.json"),serde_json::to_vec_pretty(&json!({"source":source,"destination":target,"migratedAt":chrono::Utc::now().to_rfc3339()})).map_err(error)?).map_err(error)?;
     } else if invalid {
-        return Err("Há dados antigos inválidos. A criação de uma base vazia foi bloqueada.".into());
+        return Err(
+            "Há dados antigos inválidos. A criação de uma base vazia foi bloqueada.".into(),
+        );
     }
     Ok(())
 }

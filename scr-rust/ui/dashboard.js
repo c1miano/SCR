@@ -150,8 +150,11 @@ function renderNav() {
   $('#no-courses').hidden = data.courses.length > 0;
 }
 function status(c, r) {
+  const issue = window.scrInitial?.issues?.[c.id];
   return !r
-    ? 'Revisar calendário'
+    ? issue
+      ? 'Revisar cadastro: ' + issue
+      : 'Revisar calendário'
     : r.complete
       ? 'Carga concluída'
       : r.deficit
