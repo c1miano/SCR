@@ -2,20 +2,23 @@
 
 Pessoa: professor que confere o andamento do semestre e registra aulas entre atividades.
 Tarefa: localizar disciplina, conferir carga cumprida e previsão, registrar a aula e planejar reposições.
-Sensação: diário de classe legível, sóbrio e organizado.
+Sensação: ferramenta de trabalho limpa, legível e confiável.
 
-Domínio: diário de classe, calendário letivo, chamada, carga horária, turma, reposição, semana A/B.
-Cores do contexto: branco do papel, grafite do registro, cinza das linhas, azul da caneta, âmbar da pendência, preto do quadro.
-Assinatura: linha de disciplina com régua de carga cumprida e data de conclusão. Repete-se no resumo do semestre, linha da disciplina, progresso individual, seleção de navegação e calendário.
-Defaults rejeitados: banner com cartão inclinado -> cabeçalho editorial compacto; três cartões métricos decorativos -> faixa de indicadores; backups antes da navegação -> ferramentas ao fim do menu.
+## Sistema de design (2026-11, gerado com a skill ui-ux-pro-max)
 
-Checkpoint dos componentes (cabeçalho, navegação, tabela, formulários, calendário):
-- Intent: identificar e registrar o andamento das disciplinas com pouco esforço.
-- Hierarchy: tabela e progresso lideram; títulos 28/600, valores 24/600, corpo 14, metadados 12.
-- Palette: papel, tinta e grafite, azul para ação/registro; âmbar para pendência.
-- Depth: superfícies de luminosidade próxima e divisórias discretas, sem sombras decorativas.
-- Surfaces: papel #f6f7f9, folha #fff, controle #f1f3f6; escuro #151515, #1c1c1c, #242424.
-- Typography: Bahnschrift nos títulos/valores para hierarquia compacta; Segoe UI no corpo, nativa no Windows, números tabulares.
-- Spacing: base de 4px, campos/ações 40px, painéis 24px, navegação 232px.
+Consulta usada: `education academic scheduling productivity dashboard` com `--design-system --variance 3 --motion 2 --density 7`.
 
-Reutilizar botões, inputs, selects e tabelas nativos existentes. Não alterar armazenamento, migração ou regras de cálculo. Conferir nos temas claro/escuro e larguras 1280 e 800.
+- **Estilo:** Minimalismo / Swiss Style — grade clara, superfícies planas com borda de 1px, hierarquia tipográfica forte, sem sombras decorativas (sombra só no hover dos cartões da prévia).
+- **Cores (tokens em `ui/app.css`):** primária teal, laranja para atenção/pendência, verde para concluído. A sugestão da skill era primária `#0D9488`; os botões usam `#0F766E` para atingir contraste 4,5:1 com texto branco. Tema escuro com os mesmos papéis semânticos.
+- **Aulas:** ministrada em azul, prevista em cinza, conclusão com borda tracejada verde — mesma semântica da legenda do PDF.
+- **Tipografia:** a skill sugeriu Plus Jakarta Sans, mas a CSP só permite recursos locais e o SCR funciona offline; usa-se Segoe UI Variable (Display nos títulos, Text no corpo), números tabulares, corpo 15px, mínimo 12px.
+- **Ícones:** SVG em traço (estilo Lucide) definidos uma vez como `<symbol>` no `index.html`; sem emojis ou símbolos de texto como ícone.
+- **Interação:** foco visível em todos os controles, transições de 160ms, `prefers-reduced-motion` respeitado, controles com 40px de altura.
+- **Layout:** barra lateral de 256px (216px abaixo de 960px) com a lista de disciplinas rolando de forma independente; conteúdo até 1240px; ação "Salvar e recalcular" fixa no rodapé do formulário da disciplina.
+
+## Regras
+
+- Não alterar armazenamento, migração ou regras de cálculo ao mexer na interface.
+- O JavaScript depende dos IDs, `name`s e atributos `data-nav`/`data-page` do `index.html`; preserve-os.
+- Conferir nos temas claro e escuro e nas larguras 1280 e 760 (mínimo da janela).
+- `npm run dev` com `SCR_TEST_DIR` (sem `SCR_MANUAL`) executa `ui/test-ui.js` e grava `result.json` na pasta de teste.

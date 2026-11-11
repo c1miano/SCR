@@ -176,9 +176,7 @@ function renderHome() {
   $('#step-calendar').textContent = data.calendars.length
     ? '✓ Calendário cadastrado'
     : '1 · Cadastre um calendário';
-  $('#home-primary').textContent = data.calendars.length
-    ? '＋ Cadastrar disciplina'
-    : '＋ Cadastrar calendário';
+  $('#home-primary').textContent = data.calendars.length ? 'Cadastrar disciplina' : 'Cadastrar calendário';
   $('#home-primary').onclick = () => (data.calendars.length ? newCourse() : openCalendars());
   $('#overview-empty').hidden = data.courses.length > 0;
   $('#overview-table').hidden = !data.courses.length;
@@ -216,7 +214,7 @@ function renderHome() {
     } else loadCell.textContent = 'Defina o calendário';
     row.insertCell().textContent = r?.complete ? 'Concluída' : r?.finish ? pretty(r.finish) : '—';
     const badge = document.createElement('span');
-    badge.className = 'badge' + (!r || r.deficit ? ' attention' : '');
+    badge.className = 'badge' + (!r || r.deficit ? ' attention' : r.complete ? ' done' : '');
     badge.textContent = status(c, r);
     row.insertCell().append(badge);
   }
@@ -470,6 +468,7 @@ function renderCourse() {
     r = c ? forecast(c) : null;
   $('#course-title').textContent = c ? c.name : 'Cadastrar disciplina';
   $('#status').textContent = c ? status(c, r) : 'Novo cadastro';
+  $('#status').className = 'badge' + (c && (!r || r.deficit) ? ' attention' : r?.complete ? ' done' : '');
   $('#course-results').hidden = !r;
   $('#calendar-output').hidden = !r;
   $('#export').disabled = !r;
@@ -672,7 +671,7 @@ $('#clear-filters').onclick = () => {
 };
 function syncThemeButton() {
   const dark = document.documentElement.dataset.theme === 'dark';
-  $('#theme-toggle').textContent = dark ? '☀ Modo claro' : '☾ Modo escuro';
+  $('#theme-label').textContent = dark ? 'Modo claro' : 'Modo escuro';
   $('#theme-toggle').setAttribute('aria-pressed', String(dark));
 }
 $('#theme-toggle').onclick = () => {
