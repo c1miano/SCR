@@ -31,6 +31,16 @@ pub(crate) fn schedule<'a>(c: &'a V, d: NaiveDate) -> Result<&'a V, String> {
     }
     Ok(&c["schedule"])
 }
+/// Tolerância (em minutos) para resíduos de ponto flutuante: cargas com
+/// frações de hora (ex.: 1,33 h × 50 min) podem somar 3999,9999999 em vez de 4000.
+const EPS: f64 = 1e-6;
+fn settle(x: f64) -> f64 {
+    if x.abs() < EPS {
+        0.0
+    } else {
+        x
+    }
+}
 pub fn forecast(c: &V, cal: &V) -> Result<V, String> {
     let start = date(text(&c["start"]))?;
     let end = date(text(&c["end"]))?;
@@ -55,7 +65,7 @@ pub fn forecast(c: &V, cal: &V) -> Result<V, String> {
     }
     let taught: f64 = completed.values().fold(0.0, |sum, m| sum + m);
     let done = target.min(baseline + taught);
-    let remaining = (target - done).max(0.0);
+    let remaining = settle((target - done).max(0.0));
     let mut rows = BTreeMap::new();
     let mut d = start;
     loop {
@@ -98,7 +108,7 @@ pub fn forecast(c: &V, cal: &V) -> Result<V, String> {
             available += m;
             let cr = m.min((remaining - sum).max(0.0));
             sum += cr;
-            if remaining > 0.0 && sum >= remaining && finish.is_none() {
+            if remaining > 0.0 && sum >= remaining - EPS && finish.is_none() {
                 finish = Some(text(&row["day"]).to_string());
             }
             cr
@@ -115,7 +125,7 @@ pub fn forecast(c: &V, cal: &V) -> Result<V, String> {
         }
     }
     Ok(
-        json!({"remaining":remaining,"available":available,"deficit":(remaining-available).max(0.0),"finish":finish,"complete":remaining==0.0,"done":done,"taught":taught,"rows":rows.into_values().collect::<Vec<_>>()}),
+        json!({"remaining":remaining,"available":available,"deficit":settle((remaining-available).max(0.0)),"finish":finish,"complete":remaining==0.0,"done":done,"taught":taught,"rows":rows.into_values().collect::<Vec<_>>()}),
     )
 }
 /// Calcula as previsões de todas as disciplinas.
@@ -232,5 +242,17 @@ mod tests {
         let data = json!({"version":4,"professors":[],"calendars":[],
             "courses":[{"id":"a"},{"id":"a"}]});
         assert!(projections(&data).is_err());
+    }
+    #[test]
+    fn fractional_hours_complete_without_float_residue() {
+        // 30 aulas de 50/30 min somam 49,999999999999986 em vez de 50.
+        let lessons: Vec<V> = (1..=30)
+            .map(|d| json!({"day":format!("2026-10-{:02}",d),"minutes":50.0/30.0}))
+            .collect();
+        let c = json!({"total":1,"done":0,"unit":50,"start":"2026-10-01","end":"2026-10-31",
+            "schedule":{},"completedLessons":lessons});
+        let r = forecast(&c, &json!([])).unwrap();
+        assert_eq!(r["complete"], true);
+        assert_eq!(r["deficit"], 0.0);
     }
 }

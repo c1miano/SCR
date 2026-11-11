@@ -1,4 +1,4 @@
-# SCR 2.2.4 — Rust + Tauri
+# SCR 2.2.5 — Rust + Tauri
 
 O executável, o cálculo de carga horária e a persistência foram convertidos para Rust. A interface é HTML/CSS/JavaScript, preservada e conectada aos comandos Rust pelo Tauri 2. Não há Electron nem Node.js em execução no aplicativo distribuído. O Windows usa o WebView2 para exibir as telas.
 
@@ -27,7 +27,10 @@ npm ci
 cargo test --manifest-path src-tauri/Cargo.toml
 npm run dev
 npm run build
+npm run format
 ```
+
+`npm test` executa os testes Rust e o teste do formulário de relatórios (`scripts/test-reports.cjs`). `npm run format` aplica `cargo fmt` e Prettier.
 
 O `Cargo.lock` e o `package-lock.json` fixam as dependências. `src-tauri/src/engine.rs` contém as regras de cálculo; `main.rs` contém comandos e persistência; `ui/` contém as telas. Uma falha de leitura impede editar cadastros, evitando substituir um arquivo inválido por dados vazios. Gravações usam arquivo temporário na mesma pasta e substituição atômica.
 
@@ -84,3 +87,12 @@ Ausências e cancelamentos aparecem em laranja, com a observação cadastrada; f
 ## Legenda e avisos — 2.2.4
 
 Cartões de ausência/cancelamento e feriado/dia não letivo exibem **Não registrar**, inclusive quando a observação continua em outro cartão. O aviso não é aplicado à aula extra que exista na mesma data. A indicação de conclusão prevista aparece em verde e negrito. Todas as páginas incluem legenda com amostras das seis cores, incluindo páginas de continuação e de observações. A paginação reserva espaço para a legenda e mantém os motivos completos.
+
+## Manutenção (após 2.2.5, ainda sem nova versão)
+
+- **Disciplina inválida não bloqueia a abertura.** Um erro de cálculo em uma disciplina (carga ou datas inválidas) deixa só ela sem previsão, com o motivo no status (“Revisar cadastro: …”). Erros estruturais do arquivo continuam impedindo o carregamento.
+- **Arredondamento.** Resíduos de ponto flutuante abaixo de 0,000001 minuto são desconsiderados, evitando “Reposição necessária” indevida em cargas com frações de hora.
+- **Histórico de backups com retenção.** Em `Documents/SCR/backups/` ficam sempre as 20 cópias mais recentes, todas as dos últimos 30 dias e, antes disso, a mais recente de cada semana. Apenas arquivos `scr-AAAAMMDD-HHMMSS-*.json` criados pelo SCR são considerados; `dados.backup.json`, `backups-atualizacao/` e outros arquivos não são tocados. Os nomes passam a usar o horário local.
+- O marcador `migracao-concluida.json` só é gravado se ainda não existir.
+- Removidos `ui/engine.js` e `ui/store.js`, que não eram carregados pela interface. A referência de cálculo da versão Electron continua em `semestre-desktop/ui/engine.js`.
+

@@ -51,15 +51,51 @@ fn snapshot(path: &Path) -> Result<(), String> {
     let mut file = tempfile::Builder::new()
         .prefix(&format!(
             "scr-{}-",
-            chrono::Utc::now().format("%Y%m%d-%H%M%S")
+            chrono::Local::now().format("%Y%m%d-%H%M%S")
         ))
         .suffix(".json")
-        .tempfile_in(dir)
+        .tempfile_in(&dir)
         .map_err(error)?;
     file.write_all(&bytes).map_err(error)?;
     file.as_file().sync_all().map_err(error)?;
     file.keep().map_err(error)?;
+    // A limpeza nunca impede a gravação: uma falha apenas mantém cópias a mais.
+    let _ = prune_backups(&dir, chrono::Local::now().naive_local());
     Ok(())
+}
+/// Retenção do histórico em `backups/`: mantém sempre as 20 cópias mais
+/// recentes, todas as dos últimos 30 dias e, antes disso, a mais recente de
+/// cada semana. Só considera arquivos `scr-AAAAMMDD-HHMMSS-*.json` criados
+/// pelo SCR; qualquer outro arquivo da pasta é ignorado.
+fn prune_backups(dir: &Path, now: chrono::NaiveDateTime) -> Result<usize, String> {
+    use chrono::Datelike;
+    let mut found: Vec<(chrono::NaiveDateTime, PathBuf)> = Vec::new();
+    for entry in fs::read_dir(dir).map_err(error)? {
+        let path = entry.map_err(error)?.path();
+        let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
+            continue;
+        };
+        if !name.starts_with("scr-") || !name.ends_with(".json") || name.len() < 19 {
+            continue;
+        }
+        if let Ok(when) = chrono::NaiveDateTime::parse_from_str(&name[4..19], "%Y%m%d-%H%M%S") {
+            found.push((when, path));
+        }
+    }
+    found.sort_by(|a, b| b.0.cmp(&a.0).then(b.1.cmp(&a.1)));
+    let limit = now - chrono::Duration::days(30);
+    let mut weeks = std::collections::HashSet::new();
+    let mut removed = 0;
+    for (i, (when, path)) in found.iter().enumerate() {
+        let week = when.date().iso_week();
+        let first_of_week = weeks.insert((week.year(), week.week()));
+        if i < 20 || *when >= limit || first_of_week {
+            continue;
+        }
+        fs::remove_file(path).map_err(error)?;
+        removed += 1;
+    }
+    Ok(removed)
 }
 fn save_checked(path: &Path, data: &Value, loaded: &mut Option<Value>) -> Result<Value, String> {
     let expected = loaded
@@ -71,10 +107,10 @@ fn save_checked(path: &Path, data: &Value, loaded: &mut Option<Value>) -> Result
     }
     let result = envelope(data.clone())?;
     snapshot(path)?;
-    atomic(
-        &path.with_file_name("migracao-concluida.json"),
-        &json!({"completed":true}),
-    )?;
+    let receipt = path.with_file_name("migracao-concluida.json");
+    if !receipt.try_exists().map_err(error)? {
+        atomic(&receipt, &json!({"completed":true}))?;
+    }
     atomic(path, data)?;
     *loaded = Some(data.clone());
     Ok(result)
@@ -452,5 +488,37 @@ mod migration_tests {
             snapshot(&p).unwrap();
         }
         assert_eq!(fs::read(&p).unwrap(), before);
+    }
+    #[test]
+    fn backup_retention_keeps_recent_and_one_per_week() {
+        let dir = tempfile::tempdir().unwrap();
+        let now = chrono::NaiveDate::from_ymd_opt(2026, 11, 11)
+            .unwrap()
+            .and_hms_opt(12, 0, 0)
+            .unwrap();
+        // 120 cópias, uma por dia, e um arquivo alheio que nunca deve ser apagado.
+        for d in 0..120 {
+            let when = now - chrono::Duration::days(d);
+            fs::write(
+                dir.path()
+                    .join(format!("scr-{}-x.json", when.format("%Y%m%d-%H%M%S"))),
+                b"{}",
+            )
+            .unwrap();
+        }
+        fs::write(dir.path().join("manual.json"), b"{}").unwrap();
+        let removed = prune_backups(dir.path(), now).unwrap();
+        let left: Vec<String> = fs::read_dir(dir.path())
+            .unwrap()
+            .map(|f| f.unwrap().file_name().into_string().unwrap())
+            .collect();
+        assert!(removed > 0);
+        assert!(left.contains(&"manual.json".to_string()));
+        let newest = format!("scr-{}-x.json", now.format("%Y%m%d-%H%M%S"));
+        assert!(left.contains(&newest));
+        // 31 dias recentes + ~13 semanas anteriores + o arquivo manual.
+        assert!(left.len() >= 32 && left.len() <= 50, "{}", left.len());
+        // Segunda execução não remove mais nada.
+        assert_eq!(prune_backups(dir.path(), now).unwrap(), 0);
     }
 }
