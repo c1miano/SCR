@@ -1,1 +1,14 @@
-{"name":"scr-rust","version":"2.2.5","private":true,"scripts":{"dev":"tauri dev","build":"tauri build","test":"cargo test --manifest-path src-tauri/Cargo.toml"},"devDependencies":{"@tauri-apps/cli":"^2"}}
+{
+  "name": "scr-rust",
+  "version": "2.2.5",
+  "private": true,
+  "scripts": {
+    "dev": "tauri dev",
+    "build": "tauri build",
+    "test": "cargo test --manifest-path src-tauri/Cargo.toml && node scripts/test-reports.cjs",
+    "format": "cargo fmt --manifest-path src-tauri/Cargo.toml && npx --yes prettier@3.3.3 --write \"ui/*.js\" \"ui/*.css\" \"scripts/*.cjs\""
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2"
+  }
+}
