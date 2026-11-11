@@ -107,3 +107,8 @@ Menu **Turmas e grades**: cada turma tem uma grade semanal (aulas por dia × seg
 - **Prioridade no cálculo:** alteração pontual de uma semana na disciplina > grade da turma vigente na data > rotina semanal do próprio cadastro (fixa ou A/B). Antes da primeira vigência, e para disciplinas fora de qualquer grade, vale a rotina da disciplina. Se a disciplina está em mais de uma turma, as aulas das grades são somadas.
 - Ao salvar uma grade, as disciplinas dela recebem a tag da turma (usada na prévia e nos relatórios).
 - Os dados ficam em `turmas` no `dados.json`; versões anteriores do SCR ignoram esse campo.
+- **PDF da grade:** o botão *Gerar PDF da grade* exporta a vigência exibida (A4 paisagem): quadro semanal com uma cor por disciplina, aulas seguidas agrupadas, horários, professores e resumo de aulas por semana. Usa a grade salva; com alterações pendentes no editor, o SCR pede para salvar antes.
+
+## Visual dos PDFs
+
+O calendário de registros e a grade da turma usam as cores e a tipografia da interface (`src-tauri/src/pdf.rs` repete os tokens de `ui/app.css`): marca SCR em teal, cartões de aula com faixa lateral colorida (azul ministrada, cinza prevista, roxo conferir, laranja ausência, amarelo feriado), fim de semana em fundo neutro, data de referência destacada e legenda em uma linha.

@@ -1,5 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 mod engine;
+mod grade;
+mod pdf;
 mod report;
 mod storage_location;
 use serde_json::{json, Value};
@@ -231,6 +233,32 @@ async fn export_report(filter: report::Filter, store: State<'_, Store>) -> Resul
     Ok(true)
 }
 #[tauri::command]
+async fn export_grade(
+    turma_id: String,
+    version_id: String,
+    store: State<'_, Store>,
+) -> Result<bool, String> {
+    let (bytes, name) = {
+        let _guard = store.lock.lock().map_err(error)?;
+        let data: Value =
+            serde_json::from_slice(&fs::read(&store.path).map_err(error)?).map_err(error)?;
+        let today = chrono::Local::now().date_naive();
+        (
+            grade::generate(&data, &turma_id, &version_id, today)?,
+            grade::filename(&data, &turma_id, &version_id, today),
+        )
+    };
+    let file = rfd::AsyncFileDialog::new()
+        .set_title("Salvar grade da turma")
+        .set_file_name(name)
+        .add_filter("Documento PDF", &["pdf"])
+        .save_file()
+        .await;
+    let Some(file) = file else { return Ok(false) };
+    fs::write(file.path(), bytes).map_err(error)?;
+    Ok(true)
+}
+#[tauri::command]
 fn test_report(result: Value, store: State<Store>, app: tauri::AppHandle) -> Result<(), String> {
     if !cfg!(debug_assertions) || std::env::var("SCR_TEST_DIR").is_err() {
         return Err("Indisponível".into());
@@ -266,6 +294,36 @@ fn main() {
             fs::write(
                 format!("{file}.pdf"),
                 report::generate(&input["data"], &filter)?,
+            )
+            .map_err(error)
+        };
+        if let Err(e) = run() {
+            eprintln!("{e}");
+            std::process::exit(1)
+        }
+        return;
+    }
+    if let Some(file) = std::env::args()
+        .nth(1)
+        .filter(|s| s == "--grade-fixture")
+        .and_then(|_| std::env::args().nth(2))
+    {
+        let run = || -> Result<(), String> {
+            let input: Value =
+                serde_json::from_slice(&fs::read(&file).map_err(error)?).map_err(error)?;
+            let issued = chrono::NaiveDate::parse_from_str(
+                input["issued"].as_str().unwrap_or(""),
+                "%Y-%m-%d",
+            )
+            .map_err(error)?;
+            fs::write(
+                format!("{file}.pdf"),
+                grade::generate(
+                    &input["data"],
+                    input["turmaId"].as_str().unwrap_or(""),
+                    input["versionId"].as_str().unwrap_or(""),
+                    issued,
+                )?,
             )
             .map_err(error)
         };
@@ -351,6 +409,7 @@ fn main() {
             import_backup,
             export_csv,
             export_report,
+            export_grade,
             test_report,
             ui_diagnostic
         ])

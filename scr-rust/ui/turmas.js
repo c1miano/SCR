@@ -137,6 +137,7 @@ function renderVersionSelect() {
   select.disabled = !versions.length;
   $('#turma-version-delete').disabled = !versions.length;
   $('#turma-version-fix').disabled = !versions.length;
+  $('#turma-pdf').disabled = !versions.length;
 }
 function prevDay(s) {
   const d = new Date(s + 'T12:00:00');
@@ -352,6 +353,45 @@ $('#turma-version').onchange = (e) => {
   loadDraft();
   renderGradeEditor();
   $('#turma-message').textContent = '';
+};
+/** O editor tem alterações ainda não salvas na vigência exibida? */
+function gradeDirty() {
+  const t = getTurma(),
+    v = (t.versions || []).find((x) => x.id === selectedVersion);
+  if (!v) return true;
+  const n = gradeDraft.periods.length;
+  const periods = (p) => (p || []).map((x) => [x?.start || '', x?.end || '']);
+  return (
+    JSON.stringify(resizeGrid(v.grid, n)) !== JSON.stringify(resizeGrid(gradeDraft.grid, n)) ||
+    JSON.stringify(periods(t.periods)) !== JSON.stringify(periods(gradeDraft.periods)) ||
+    $('#turma-valid-from').value !== v.validFrom
+  );
+}
+$('#turma-pdf').onclick = async () => {
+  const t = getTurma(),
+    btn = $('#turma-pdf');
+  if (!t || !selectedVersion) {
+    $('#turma-message').textContent = 'Salve uma vigência da grade antes de gerar o PDF.';
+    return;
+  }
+  if (gradeDirty()) {
+    $('#turma-message').textContent =
+      'Há alterações não salvas na grade. Salve a vigência (nova ou corrigida) antes de gerar o PDF: ele usa a grade salva.';
+    return;
+  }
+  btn.disabled = true;
+  $('#turma-message').textContent = 'Preparando o PDF da grade...';
+  try {
+    const saved = await window.__TAURI__.core.invoke('export_grade', {
+      turmaId: t.id,
+      versionId: selectedVersion,
+    });
+    $('#turma-message').textContent = saved ? 'PDF da grade salvo.' : 'Exportação cancelada.';
+  } catch (error) {
+    $('#turma-message').textContent = 'Não foi possível gerar o PDF: ' + error;
+  } finally {
+    btn.disabled = false;
+  }
 };
 $('#turma-version-new').onclick = () => saveVersion('new');
 $('#turma-version-fix').onclick = () => saveVersion('fix');

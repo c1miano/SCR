@@ -1,4 +1,10 @@
 use crate::engine;
+#[cfg(test)]
+use crate::pdf::literal;
+use crate::pdf::{
+    self, wrap, Pdf, Tone, BG, BOTTOM, INK, LINE, MARGIN, MUTED, PAGE_W, PRIMARY, SUBTLE,
+    SURFACE_2, WHITE,
+};
 use chrono::{Datelike, Duration, NaiveDate};
 use serde::Deserialize;
 use serde_json::Value;
@@ -285,161 +291,67 @@ pub fn filename(data: &Value, f: &Filter, issued: NaiveDate) -> String {
     )
 }
 
-// PDF 1.4 with standard Type 1 fonts and Windows-1252 for Portuguese text.
-fn encoded(text: &str) -> Vec<u8> {
-    text.chars()
-        .map(|c| match c {
-            '\u{2013}' | '\u{2014}' => b'-',
-            '\u{2018}' | '\u{2019}' => b'\'',
-            '\u{201c}' | '\u{201d}' => b'"',
-            c if (c as u32) <= 255 => c as u8,
-            _ => b'?',
-        })
-        .collect()
-}
-fn literal(text: &str) -> String {
-    encoded(text).iter().map(|c| format!("{c:02X}")).collect()
-}
-struct Pdf {
-    pages: Vec<String>,
-    page: String,
-    y: f64,
-    landscape: bool,
-}
-impl Pdf {
-    fn new() -> Self {
-        Self {
-            pages: Vec::new(),
-            page: String::new(),
-            y: 0.0,
-            landscape: false,
-        }
-    }
-    fn next(&mut self) {
-        if !self.page.is_empty() {
-            self.pages.push(std::mem::take(&mut self.page));
-        }
-        self.y = if self.landscape { 550.0 } else { 780.0 };
-        self.text("SCR | CALENDÁRIO DE AULAS", 11.0, true);
-        self.y -= 12.0;
-    }
-    fn text(&mut self, t: &str, size: f64, bold: bool) {
-        self.page.push_str(&format!(
-            "BT /{} {size} Tf 0.12 0.15 0.19 rg 1 0 0 1 44 {} Tm <{}> Tj ET\n",
-            if bold { "F2" } else { "F1" },
-            self.y,
-            literal(t)
-        ));
-        self.y -= size + 5.0;
-    }
-    fn lines(t: &str, max: usize) -> Vec<String> {
-        let mut out = Vec::new();
-        for paragraph in t.lines() {
-            let mut line = String::new();
-            for word in paragraph.split_whitespace() {
-                for chunk in word.chars().collect::<Vec<_>>().chunks(max) {
-                    let word: String = chunk.iter().collect();
-                    if line.chars().count() + word.chars().count() + 1 > max {
-                        out.push(std::mem::take(&mut line));
-                    }
-                    if !line.is_empty() {
-                        line.push(' ')
-                    }
-                    line.push_str(&word);
-                }
-            }
-            out.push(line);
-        }
-        out
-    }
-    fn block(&mut self, t: &str, size: f64, bold: bool) {
-        let max = (500.0 / (size * 0.62)) as usize;
-        for line in Self::lines(t, max) {
-            if self.y < 100.0 {
-                self.next();
-            }
-            self.text(&line, size, bold);
-        }
-    }
-    fn bytes(mut self) -> Vec<u8> {
-        if !self.page.is_empty() {
-            self.pages.push(self.page);
-        }
-        let count = self.pages.len();
-        let mut objects=vec!["<< /Type /Catalog /Pages 2 0 R >>".into(),format!("<< /Type /Pages /Count {count} /Kids [{}] >>",(0..count).map(|i|format!("{} 0 R",5+i*2)).collect::<Vec<_>>().join(" ")),"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>".into(),"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>".into()];
-        for (i, mut content) in self.pages.into_iter().enumerate() {
-            content.push_str(&legend());
-            content.push_str(&format!("0.82 0.84 0.87 RG 0.5 w 44 42 m 798 42 l S\nBT /F1 8 Tf 0.35 0.38 0.42 rg 1 0 0 1 44 24 Tm <{}> Tj ET\n",literal(&format!("SCR - Relatório de acompanhamento | Página {} de {}",i+1,count))));
-            objects.push(format!("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {} {}] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents {} 0 R >>",if self.landscape{842}else{595},if self.landscape{595}else{842},6+i*2));
-            objects.push(format!(
-                "<< /Length {} >>\nstream\n{}endstream",
-                content.len(),
-                content
-            ));
-        }
-        let mut bytes = b"%PDF-1.4\n".to_vec();
-        let mut offsets = vec![0];
-        for (i, o) in objects.iter().enumerate() {
-            offsets.push(bytes.len());
-            bytes.extend(format!("{} 0 obj\n{}\nendobj\n", i + 1, o).as_bytes());
-        }
-        let xref = bytes.len();
-        bytes.extend(format!("xref\n0 {}\n0000000000 65535 f \n", offsets.len()).as_bytes());
-        for off in offsets.iter().skip(1) {
-            bytes.extend(format!("{off:010} 00000 n \n").as_bytes());
-        }
-        bytes.extend(
-            format!(
-                "trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n",
-                offsets.len()
-            )
-            .as_bytes(),
-        );
-        bytes
-    }
-}
-const ABSENCE_COLOR: &str = "1 0.76 0.49";
-const CALENDAR_COLOR: &str = "1 0.95 0.55";
-const FINISH_COLOR: &str = "0.08 0.42 0.20";
-fn legend() -> String {
-    let mut result = format!(
-        "BT /F2 8 Tf 0.12 0.15 0.19 rg 1 0 0 1 44 82 Tm <{}> Tj ET\n",
-        literal("Legenda")
-    );
-    for (i, (label, color)) in [
-        ("Ministrada", "0.86 0.92 0.99"),
-        ("Prevista", "0.95 0.96 0.97"),
-        ("Conferir registro", "0.93 0.89 0.98"),
-        ("Ausência / cancelamento", ABSENCE_COLOR),
-        ("Feriado / dia não letivo", CALENDAR_COLOR),
-        ("Conclusão prevista", FINISH_COLOR),
-    ]
-    .iter()
-    .enumerate()
-    {
-        let x = 44.0 + (i % 3) as f64 * 245.0;
-        let y = 67.0 - (i / 3) as f64 * 14.0;
-        result.push_str(&format!("q {color} rg 0.7 0.7 0.7 RG 0.4 w {x} {y} 9 9 re B Q\nBT /F1 8 Tf 0.12 0.15 0.19 rg 1 0 0 1 {} {} Tm <{}> Tj ET\n",x+14.0,y+1.0,literal(label)));
-    }
-    result
-}
-fn push_card(
-    cards: &mut Vec<(Vec<String>, &'static str)>,
-    lines: Vec<String>,
-    color: &'static str,
-) {
+// Cores das aulas: as mesmas de `.preview-lesson` na interface.
+pub(crate) const TAUGHT: Tone = Tone {
+    fill: "#e0eaff",
+    stroke: "#93b4f0",
+    accent: "#1d4ed8",
+};
+pub(crate) const PLANNED: Tone = Tone {
+    fill: "#f1f5f4",
+    stroke: "#cad8d5",
+    accent: "#8a9e9a",
+};
+pub(crate) const REVIEW: Tone = Tone {
+    fill: "#f3e8ff",
+    stroke: "#d8b4fe",
+    accent: "#7c3aed",
+};
+pub(crate) const ABSENCE: Tone = Tone {
+    fill: "#ffedd5",
+    stroke: "#fdba74",
+    accent: "#c2410c",
+};
+pub(crate) const HOLIDAY: Tone = Tone {
+    fill: "#fef9c3",
+    stroke: "#fde047",
+    accent: "#ca8a04",
+};
+pub(crate) const FINISH: Tone = Tone {
+    fill: "#dcfce7",
+    stroke: "#86efac",
+    accent: "#15803d",
+};
+const CARD_LINE: f64 = 9.0;
+const CARD_TEXT: f64 = 104.0 - 12.0;
+
+fn push_card(cards: &mut Vec<(Vec<String>, Tone)>, lines: Vec<String>, tone: Tone) {
     for (i, chunk) in lines.chunks(14).enumerate() {
         let mut part = Vec::new();
         if i > 0 {
             part.push("Observação (cont.)".into());
         }
-        if color == ABSENCE_COLOR || color == CALENDAR_COLOR {
+        if tone == ABSENCE || tone == HOLIDAY {
             part.push("Não registrar".into());
         }
         part.extend_from_slice(chunk);
-        cards.push((part, color));
+        cards.push((part, tone));
     }
 }
+const MONTHS: [&str; 12] = [
+    "Janeiro",
+    "Fevereiro",
+    "Março",
+    "Abril",
+    "Maio",
+    "Junho",
+    "Julho",
+    "Agosto",
+    "Setembro",
+    "Outubro",
+    "Novembro",
+    "Dezembro",
+];
 fn calendar_pdf(data: &Value, report: &Report, month: &str, pdf: &mut Pdf) -> Result<(), String> {
     let first = date(&format!("{month}-01"))?;
     let next = if first.month() == 12 {
@@ -451,66 +363,36 @@ fn calendar_pdf(data: &Value, report: &Report, month: &str, pdf: &mut Pdf) -> Re
     let days = (next - first).num_days() as usize;
     let offset = first.weekday().num_days_from_monday() as usize;
     let projections = engine::projections(data)?;
+    let reference = date(&report.reference).ok();
+    let title = format!("{} {}", MONTHS[(first.month() - 1) as usize], first.year());
+    let col_w = (PAGE_W - 2.0 * MARGIN) / 7.0;
 
-    let title = format!(
-        "{} {}",
-        [
-            "Janeiro",
-            "Fevereiro",
-            "Março",
-            "Abril",
-            "Maio",
-            "Junho",
-            "Julho",
-            "Agosto",
-            "Setembro",
-            "Outubro",
-            "Novembro",
-            "Dezembro"
-        ][(first.month() - 1) as usize],
-        first.year()
-    );
-    fn at(pdf: &mut Pdf, x: f64, y: f64, text: &str, size: f64, bold: bool) {
-        let finish = text == "Conclusão prevista";
-        let color = if finish {
-            FINISH_COLOR
-        } else {
-            "0.12 0.15 0.19"
-        };
-        pdf.page.push_str(&format!(
-            "BT /{} {size} Tf {color} rg 1 0 0 1 {x} {y} Tm <{}> Tj ET\n",
-            if bold || finish || text == "Não registrar" {
-                "F2"
-            } else {
-                "F1"
-            },
-            literal(text)
-        ));
-    }
-    fn rect(pdf: &mut Pdf, x: f64, y: f64, w: f64, h: f64, color: &str) {
-        pdf.page.push_str(&format!(
-            "q {color} rg 0.82 0.84 0.87 RG 0.4 w {x} {y} {w} {h} re B Q\n"
-        ));
-    }
-    fn heading(pdf: &mut Pdf, title: &str, report: &Report) {
+    fn heading(pdf: &mut Pdf, title: &str, report: &Report, col_w: f64) {
         pdf.next();
-        pdf.block(title, 20.0, true);
-        pdf.block(&report.label, 11.0, true);
-        pdf.block(
+        pdf.heading(
+            title,
+            &report.label,
             &format!("Referência: {}", pretty(&report.reference)),
-            9.0,
-            false,
         );
-        pdf.y -= 8.0;
-        for (i, label) in ["SEG", "TER", "QUA", "QUI", "SEX", "SÁB", "DOM"]
+        // Cabeçalho dos dias da semana, como o da prévia na interface.
+        let y = pdf.y;
+        pdf.rect(
+            MARGIN,
+            y - 6.0,
+            PAGE_W - 2.0 * MARGIN,
+            18.0,
+            SURFACE_2,
+            Some(LINE),
+        );
+        for (i, label) in ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"]
             .iter()
             .enumerate()
         {
-            at(pdf, 34.0 + i as f64 * 111.0, pdf.y, label, 9.0, true);
+            pdf.label_at(MARGIN + 7.0 + i as f64 * col_w, y, label, 7.5, SUBTLE);
         }
-        pdf.y -= 12.0;
+        pdf.y -= 6.0;
     }
-    heading(pdf, &title, report);
+    heading(pdf, &title, report, col_w);
     for week in 0..(offset + days).div_ceil(7) {
         let mut cells = Vec::new();
         for col in 0..7 {
@@ -541,9 +423,9 @@ fn calendar_pdf(data: &Value, report: &Report, month: &str, pdf: &mut Pdf) -> Re
                                     }
                                 })
                                 .unwrap_or(0.0);
-                            let mut lines = Pdf::lines(&course.name, 23);
+                            let mut lines = wrap(&course.name, 7.5, true, CARD_TEXT);
                             lines.push(format!(
-                                "{} {} | {}",
+                                "{} {} · {}",
                                 amount(minutes / course.unit),
                                 if course.unit == 60.0 { "h" } else { "h-aula" },
                                 if row.status == "Registrada" {
@@ -554,30 +436,33 @@ fn calendar_pdf(data: &Value, report: &Report, month: &str, pdf: &mut Pdf) -> Re
                                     "Prevista"
                                 }
                             ));
-                            lines.extend(Pdf::lines(&course.people, 23));
+                            lines.extend(wrap(&course.people, 7.5, false, CARD_TEXT));
                             if s(&projections[&course.id]["finish"]) == key {
                                 lines.push("Conclusão prevista".into());
                             }
-                            let color = if row.status == "Registrada" {
-                                "0.86 0.92 0.99"
+                            let tone = if row.status == "Registrada" {
+                                TAUGHT
                             } else if row.status == "Conferir registro" {
-                                "0.93 0.89 0.98"
+                                REVIEW
                             } else {
-                                "0.95 0.96 0.97"
+                                PLANNED
                             };
-                            push_card(&mut cards, lines, color);
+                            push_card(&mut cards, lines, tone);
                         }
                         for event in &row.events {
-                            let mut lines = Pdf::lines(&course.name, 23);
-                            lines.extend(Pdf::lines(&event.text, 23));
+                            let mut lines = wrap(&course.name, 7.5, true, CARD_TEXT);
+                            // "Motivo: detalhe" -> motivo numa linha e detalhe abaixo.
+                            match event.text.split_once(": ") {
+                                Some((kind, detail)) => {
+                                    lines.extend(wrap(&format!("{kind}:"), 7.5, false, CARD_TEXT));
+                                    lines.extend(wrap(detail, 7.5, false, CARD_TEXT));
+                                }
+                                None => lines.extend(wrap(&event.text, 7.5, false, CARD_TEXT)),
+                            }
                             push_card(
                                 &mut cards,
                                 lines,
-                                if event.absence {
-                                    ABSENCE_COLOR
-                                } else {
-                                    CALENDAR_COLOR
-                                },
+                                if event.absence { ABSENCE } else { HOLIDAY },
                             );
                         }
                     }
@@ -585,7 +470,7 @@ fn calendar_pdf(data: &Value, report: &Report, month: &str, pdf: &mut Pdf) -> Re
             }
             cells.push((day, cards));
         }
-        // Split unusually busy weeks across sheets rather than cutting off lessons.
+        // Semanas muito cheias continuam em outra folha em vez de cortar aulas.
         let max_cards = cells
             .iter()
             .map(|(_, cards)| cards.len())
@@ -600,36 +485,69 @@ fn calendar_pdf(data: &Value, report: &Report, month: &str, pdf: &mut Pdf) -> Re
                         .iter()
                         .skip(batch * 2)
                         .take(2)
-                        .map(|(lines, _)| lines.len() as f64 * 9.0 + 12.0)
+                        .map(|(lines, _)| lines.len() as f64 * CARD_LINE + 12.0)
                         .sum::<f64>()
                         + 26.0
                 })
-                .fold(58.0, f64::max);
-            if pdf.y - height < 100.0 {
-                heading(pdf, &format!("{title} - continuação"), report);
+                .fold(56.0, f64::max);
+            if pdf.y - height < BOTTOM {
+                heading(pdf, &format!("{title} - continuação"), report, col_w);
             }
             let top = pdf.y;
             for (col, (day, cards)) in cells.iter().enumerate() {
-                let x = 30.0 + col as f64 * 111.0;
-                rect(pdf, x, top - height, 111.0, height, "1 1 1");
-                if let Some(day) = day {
-                    at(
-                        pdf,
-                        x + 5.0,
-                        top - 13.0,
-                        &format!("{}{}", day.day(), if batch > 0 { " (cont.)" } else { "" }),
+                let x = MARGIN + col as f64 * col_w;
+                let weekend = col >= 5;
+                let fill = match day {
+                    None => BG,
+                    Some(_) if weekend => BG,
+                    Some(_) => WHITE,
+                };
+                pdf.rect(x, top - height, col_w, height, fill, Some(LINE));
+                let Some(day) = day else { continue };
+                let label = format!("{}", day.day());
+                if Some(*day) == reference {
+                    // Data de referência destacada com a cor primária, como "hoje" na interface.
+                    let w = pdf::width(&label, 9.0, true) + 8.0;
+                    pdf.rect(x + 4.0, top - 16.0, w, 13.0, PRIMARY, None);
+                    pdf.text_at(x + 8.0, top - 12.6, &label, 9.0, true, WHITE);
+                } else {
+                    pdf.text_at(
+                        x + 7.0,
+                        top - 12.6,
+                        &label,
                         9.0,
                         true,
+                        if weekend { SUBTLE } else { INK },
                     );
-                    let mut y = top - 21.0;
-                    for (lines, color) in cards.iter().skip(batch * 2).take(2) {
-                        let h = lines.len() as f64 * 9.0 + 8.0;
-                        rect(pdf, x + 3.0, y - h, 105.0, h, color);
-                        for (i, line) in lines.iter().enumerate() {
-                            at(pdf, x + 7.0, y - 11.0 - i as f64 * 9.0, line, 7.5, i == 0);
-                        }
-                        y -= h + 4.0;
+                }
+                if batch > 0 {
+                    let x2 = x + 10.0 + pdf::width(&label, 9.0, true);
+                    pdf.text_at(x2, top - 12.6, "(cont.)", 7.0, false, SUBTLE);
+                }
+                let mut y = top - 21.0;
+                for (lines, tone) in cards.iter().skip(batch * 2).take(2) {
+                    let h = lines.len() as f64 * CARD_LINE + 8.0;
+                    pdf.card(x + 3.5, y - h, col_w - 7.0, h, *tone);
+                    for (i, line) in lines.iter().enumerate() {
+                        let (bold, color) = if line == "Conclusão prevista" {
+                            (true, FINISH.accent)
+                        } else if line == "Não registrar" {
+                            (true, tone.accent)
+                        } else if i == 0 || (i == 1 && lines[0] == "Não registrar") {
+                            (true, INK)
+                        } else {
+                            (false, MUTED)
+                        };
+                        pdf.text_at(
+                            x + 9.0,
+                            y - 10.5 - i as f64 * CARD_LINE,
+                            line,
+                            7.5,
+                            bold,
+                            color,
+                        );
                     }
+                    y -= h + 4.0;
                 }
             }
             pdf.y -= height;
@@ -671,18 +589,26 @@ pub fn selected_months(f: &Filter) -> Result<Vec<String>, String> {
 pub fn generate(data: &Value, f: &Filter) -> Result<Vec<u8>, String> {
     let months = selected_months(f)?;
     let report = collect(data, f)?;
-    let mut pdf = Pdf::new();
-    pdf.landscape = true;
+    let mut pdf = Pdf::new("Calendário de aulas", "SCR · Relatório de acompanhamento");
+    pdf.legend = vec![
+        ("Ministrada", TAUGHT),
+        ("Prevista", PLANNED),
+        ("Conferir registro", REVIEW),
+        ("Ausência / cancelamento", ABSENCE),
+        ("Feriado / dia não letivo", HOLIDAY),
+        ("Conclusão prevista", FINISH),
+    ];
     for month in months {
         calendar_pdf(data, &report, &month, &mut pdf)?;
     }
     if !report.notes.trim().is_empty() {
-        if pdf.y < 110.0 {
+        if pdf.y < BOTTOM + 40.0 {
             pdf.next();
         } else {
-            pdf.y -= 20.0;
+            pdf.y -= 22.0;
         }
-        pdf.block("Observações", 12.0, true);
+        pdf.text_at(MARGIN, pdf.y, "Observações", 12.0, true, INK);
+        pdf.y -= 18.0;
         pdf.block(report.notes.trim(), 10.0, false);
     }
     Ok(pdf.bytes())
@@ -778,20 +704,17 @@ mod tests {
         f.notes = "Observação longa para verificar paginação. ".repeat(40);
         let pdf = String::from_utf8(generate(&data(), &f).unwrap()).unwrap();
         assert_eq!(
-            pdf.matches(&literal("Legenda")).count(),
+            pdf.matches(&literal("LEGENDA")).count(),
             pdf.matches("/Type /Page /Parent").count()
         );
     }
     #[test]
     fn no_register_is_only_added_to_blocked_cards() {
-        for color in [ABSENCE_COLOR, CALENDAR_COLOR, "0.95 0.96 0.97"] {
+        for color in [ABSENCE, HOLIDAY, PLANNED] {
             let mut cards = Vec::new();
             push_card(&mut cards, vec!["Motivo".into(); 40], color);
             for (lines, _) in cards {
-                assert_eq!(
-                    lines.iter().any(|l| l == "Não registrar"),
-                    color != "0.95 0.96 0.97"
-                );
+                assert_eq!(lines.iter().any(|l| l == "Não registrar"), color != PLANNED);
                 assert!(lines.len() <= 16);
             }
         }
@@ -801,7 +724,7 @@ mod tests {
         let mut f = filter("professor", "p");
         f.months.push("2026-11".into());
         let pdf = String::from_utf8(generate(&data(), &f).unwrap()).unwrap();
-        assert!(pdf.contains(&format!("/F2 7.5 Tf {FINISH_COLOR} rg")));
+        assert!(pdf.contains(&format!("/F2 7.5 Tf {} rg", pdf::rgb(FINISH.accent))));
     }
     #[test]
     fn calendar_has_no_explanatory_appendix_and_notes_are_optional() {
@@ -826,17 +749,17 @@ mod tests {
             json!([{"start":"2026-10-26","end":"2026-10-26","note":"Reunião pedagógica"}]);
         d["calendars"][0]["entries"].as_array_mut().unwrap().push(json!({"start":"2026-10-28","end":"2026-10-28","type":"non-school","name":"Planejamento"}));
         let pdf = String::from_utf8(generate(&d, &filter("professor", "p")).unwrap()).unwrap();
-        assert!(pdf.contains(ABSENCE_COLOR));
-        assert!(pdf.contains(CALENDAR_COLOR));
+        assert!(pdf.contains(&pdf::rgb(ABSENCE.fill)));
+        assert!(pdf.contains(&pdf::rgb(HOLIDAY.fill)));
         assert!(pdf.contains(&literal("Reunião pedagógica")));
-        assert!(pdf.contains(&literal("Feriado: Feriado")));
+        assert!(pdf.contains(&literal("Feriado:")));
         assert!(pdf.contains(&literal("Dia não letivo:")));
     }
     #[test]
     fn long_notes_are_split_without_losing_content() {
         let lines = (0..70).map(|i| format!("Linha {i}")).collect::<Vec<_>>();
         let mut cards = Vec::new();
-        push_card(&mut cards, lines.clone(), ABSENCE_COLOR);
+        push_card(&mut cards, lines.clone(), ABSENCE);
         assert!(cards.iter().all(|(p, _)| p.len() <= 19));
         let recovered = cards
             .iter()
