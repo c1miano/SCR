@@ -30,6 +30,8 @@ npm run build
 npm run format
 ```
 
+Para abrir a interface com uma cópia de dados de teste, sem o roteiro automático que fecha a janela: `$env:SCR_TEST_DIR="<pasta>"; $env:SCR_MANUAL="1"; npm run dev` (só em build de desenvolvimento).
+
 `npm test` executa os testes Rust e o teste do formulário de relatórios (`scripts/test-reports.cjs`). `npm run format` aplica `cargo fmt` e Prettier.
 
 O `Cargo.lock` e o `package-lock.json` fixam as dependências. `src-tauri/src/engine.rs` contém as regras de cálculo; `main.rs` contém comandos e persistência; `ui/` contém as telas. Uma falha de leitura impede editar cadastros, evitando substituir um arquivo inválido por dados vazios. Gravações usam arquivo temporário na mesma pasta e substituição atômica.
