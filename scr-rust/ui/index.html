@@ -14,6 +14,7 @@
       <symbol id="i-calendar-grid" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="2" /><path d="M8 2v4M16 2v4M3 10h18" /><path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01" /></symbol>
       <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="2" /><path d="M8 2v4M16 2v4M3 10h18" /></symbol>
       <symbol id="i-users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5" /><path d="M2.5 21v-1.5A5.5 5.5 0 0 1 8 14h2a5.5 5.5 0 0 1 5.5 5.5V21" /><path d="M16 4.6a3.5 3.5 0 0 1 0 6.8M21.5 21v-1.5a5.5 5.5 0 0 0-3.5-5.1" /></symbol>
+      <symbol id="i-table" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M3 9h18M3 15h18M9 3v18M15 3v18" /></symbol>
       <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></symbol>
       <symbol id="i-file" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8Z" /><path d="M14 3v5h5M9 13h6M9 17h6" /></symbol>
       <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M5 21h14" /></symbol>
@@ -48,6 +49,9 @@
           </button>
           <button id="nav-preview" data-nav="preview" type="button">
             <svg class="icon" aria-hidden="true"><use href="#i-calendar-grid" /></svg><span>Prévia por turma</span>
+          </button>
+          <button id="nav-turmas" data-nav="turmas" type="button">
+            <svg class="icon" aria-hidden="true"><use href="#i-table" /></svg><span>Turmas e grades</span>
           </button>
           <button id="nav-calendars" data-nav="calendars" type="button">
             <svg class="icon" aria-hidden="true"><use href="#i-calendar" /></svg><span>Calendários</span>
@@ -274,6 +278,65 @@
                 deixa de aparecer em todos os meses. Os registros permanecem no cadastro da disciplina.
               </p>
             </div>
+          </section>
+
+          <!-- TURMAS E GRADES -->
+          <section data-page="turmas" hidden>
+            <div class="page-heading">
+              <span class="eyebrow">Horário semanal</span>
+              <h1>Turmas e grades</h1>
+              <p>
+                Monte a grade de horários de cada turma. Ela define em que dias e quantas aulas cada disciplina tem, e pode ser alterada a
+                qualquer momento: a nova grade vale a partir da data escolhida e as semanas anteriores continuam com a grade antiga.
+              </p>
+            </div>
+            <form id="create-turma" class="panel inline-form turma-form">
+              <label>Nome da turma<input name="name" required maxlength="60" autocomplete="off" placeholder="Ex.: 501" /></label>
+              <label>Aulas por dia<input name="periods" type="number" min="1" max="12" step="1" value="5" required /></label>
+              <button class="primary" type="submit"><svg class="icon" aria-hidden="true"><use href="#i-plus" /></svg>Cadastrar turma</button>
+            </form>
+            <p id="turma-empty" class="help">Nenhuma turma cadastrada. Disciplinas sem grade continuam usando a rotina semanal do próprio cadastro.</p>
+            <div id="turma-list" class="card-grid"></div>
+            <section id="turma-detail" class="panel" hidden>
+              <div class="panel-title panel-between">
+                <div>
+                  <span class="eyebrow">Turma selecionada</span>
+                  <h2 id="turma-title"></h2>
+                </div>
+                <button id="turma-delete" type="button" class="secondary">Excluir turma</button>
+              </div>
+              <form id="turma-settings" class="inline-form turma-form">
+                <label>Nome da turma<input name="name" required maxlength="60" /></label>
+                <label>Aulas por dia<input name="periods" type="number" min="1" max="12" step="1" required /></label>
+                <button class="secondary" type="submit">Salvar dados da turma</button>
+              </form>
+              <hr />
+              <div class="grade-toolbar">
+                <label>Vigência exibida<select id="turma-version"></select></label>
+              </div>
+              <div class="table-wrap grade-wrap">
+                <table class="grade">
+                  <thead id="grade-head"></thead>
+                  <tbody id="grade-body"></tbody>
+                </table>
+              </div>
+              <div id="grade-summary" class="grade-summary" aria-live="polite"></div>
+              <div class="grade-save">
+                <label>Válida a partir de<input id="turma-valid-from" type="date" required /></label>
+                <div class="button-group">
+                  <button id="turma-version-delete" type="button" class="secondary">Excluir vigência</button>
+                  <button id="turma-version-fix" type="button" class="secondary">Corrigir esta vigência</button>
+                  <button id="turma-version-new" type="button" class="primary">Salvar como nova vigência</button>
+                </div>
+              </div>
+              <p class="help">
+                <strong>Salvar como nova vigência</strong> quando o horário mudou de fato: a grade nova vale a partir da data e as semanas
+                anteriores ficam como estavam. <strong>Corrigir esta vigência</strong> quando a grade exibida foi cadastrada errada. Aulas já
+                marcadas como ministradas nunca mudam. Para trocar só uma semana, use “Alterar uma semana específica” na disciplina. Ao salvar,
+                as disciplinas da grade recebem a tag desta turma.
+              </p>
+              <p id="turma-message" role="status" aria-live="polite"></p>
+            </section>
           </section>
 
           <!-- CALENDÁRIOS -->
@@ -539,6 +602,7 @@
                     <p>Quantidade de horas ou horas-aula em cada dia.</p>
                   </div>
                 </div>
+                <div id="course-grade-note" class="notice grade-note" hidden></div>
                 <label class="routine-mode">
                   Tipo de rotina
                   <select name="scheduleMode">

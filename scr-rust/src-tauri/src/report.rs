@@ -131,6 +131,9 @@ pub fn collect(data: &Value, f: &Filter) -> Result<Report, String> {
             rows.push(Row{events:Vec::new(),day:s(&row["day"]).into(),minutes:n(&row["minutes"]),status:if completed{"Registrada"}else if pending{"Conferir registro"}else{"Prevista"}.into(),reason:if completed{"Marcada como ministrada no SCR."}else if pending{"Motivo não informado: aula prevista sem marcação. Confirmar se foi ministrada antes de registrar."}else{"Data futura em relação à referência; ainda não é pendência."}.into()});
         }
         if let Some(cal) = cal.filter(|_| !r.is_null()) {
+            // Mesma carga diária das previsões, incluindo a grade da turma.
+            let mut graded = c.clone();
+            graded["gradeTurmas"] = engine::grade_for(data, &c["id"]);
             let mut day = date(s(&cal["start"]))?;
             let end = date(s(&cal["end"]))?;
             let last = if r["complete"] == true {
@@ -147,9 +150,9 @@ pub fn collect(data: &Value, f: &Filter) -> Result<Report, String> {
             };
             while day <= end {
                 let key = day.to_string();
-                let regular = n(
-                    &engine::schedule(c, day)?[day.weekday().num_days_from_sunday().to_string()]
-                ) * unit;
+                let regular = n(&engine::schedule(&graded, day)?
+                    [day.weekday().num_days_from_sunday().to_string()])
+                    * unit;
                 if regular > 0.0 && key.as_str() <= last {
                     let mut reasons = Vec::new();
                     let mut events = Vec::new();

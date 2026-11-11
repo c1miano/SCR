@@ -98,3 +98,12 @@ Cartões de ausência/cancelamento e feriado/dia não letivo exibem **Não regis
 - O marcador `migracao-concluida.json` só é gravado se ainda não existir.
 - Removidos `ui/engine.js` e `ui/store.js`, que não eram carregados pela interface. A referência de cálculo da versão Electron continua em `semestre-desktop/ui/engine.js`.
 
+
+## Turmas e grade semanal (após 2.2.5)
+
+Menu **Turmas e grades**: cada turma tem uma grade semanal (aulas por dia × segunda a sábado), em que cada célula é uma aula de uma disciplina, na unidade da disciplina. A grade define os dias e a carga de cada disciplina nas previsões, na prévia e nos relatórios PDF.
+
+- **Vigências:** a grade pode mudar a qualquer momento. *Salvar como nova vigência* cria uma grade válida a partir da data escolhida; as semanas anteriores continuam com a grade antiga. *Corrigir esta vigência* edita a grade exibida quando ela foi cadastrada errada. Aulas marcadas como ministradas nunca mudam.
+- **Prioridade no cálculo:** alteração pontual de uma semana na disciplina > grade da turma vigente na data > rotina semanal do próprio cadastro (fixa ou A/B). Antes da primeira vigência, e para disciplinas fora de qualquer grade, vale a rotina da disciplina. Se a disciplina está em mais de uma turma, as aulas das grades são somadas.
+- Ao salvar uma grade, as disciplinas dela recebem a tag da turma (usada na prévia e nos relatórios).
+- Os dados ficam em `turmas` no `dados.json`; versões anteriores do SCR ignoram esse campo.

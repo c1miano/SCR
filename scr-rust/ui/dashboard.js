@@ -130,6 +130,7 @@ function show(next) {
     course: 'Disciplinas',
     professors: 'Professores',
     preview: 'Prévia por turma',
+    turmas: 'Turmas e grades',
     reports: 'Relatórios em PDF',
   }[next];
   announce('');
@@ -474,6 +475,7 @@ function renderCourse() {
   $('#export').disabled = !r;
   $('#course-missing-calendar').hidden = !c || !!r;
   renderProfessorEffects(c);
+  if (typeof renderCourseGradeNote === 'function') renderCourseGradeNote(raw);
   if (!r) return;
   const unit = c.unit === 60 ? 'h' : 'h-aula';
   $('#metrics').innerHTML =

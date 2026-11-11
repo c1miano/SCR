@@ -16,20 +16,86 @@ fn date(s: &str) -> Result<NaiveDate, String> {
 fn week(d: NaiveDate) -> NaiveDate {
     d - Duration::days(d.weekday().num_days_from_monday() as i64)
 }
-pub(crate) fn schedule<'a>(c: &'a V, d: NaiveDate) -> Result<&'a V, String> {
+/// Grade semanal das turmas que incluem a disciplina.
+///
+/// Cada turma (`data.turmas`) guarda versões da grade com `validFrom`. Uma
+/// versão vale da sua data até a véspera da próxima. Cada célula da grade é
+/// uma aula na unidade da disciplina; contar as células da disciplina num dia
+/// da semana dá a carga desse dia. Só entram turmas cuja grade cita a
+/// disciplina em alguma versão; se uma versão posterior a remove, a carga
+/// passa a zero a partir dessa data.
+pub fn grade_for(data: &V, course_id: &V) -> V {
+    let mut turmas = Vec::new();
+    for turma in array(&data["turmas"]) {
+        let mut versions: Vec<V> = array(&turma["versions"])
+            .into_iter()
+            .map(|v| {
+                let mut counts = serde_json::Map::new();
+                if let Some(grid) = v["grid"].as_object() {
+                    for (weekday, cells) in grid {
+                        let n = array(cells).iter().filter(|x| **x == course_id).count();
+                        if n > 0 {
+                            counts.insert(weekday.clone(), json!(n));
+                        }
+                    }
+                }
+                json!({"validFrom": v["validFrom"], "schedule": counts})
+            })
+            .collect();
+        let cites = versions
+            .iter()
+            .any(|v| v["schedule"].as_object().is_some_and(|m| !m.is_empty()));
+        if !cites {
+            continue;
+        }
+        versions.sort_by(|a, b| text(&a["validFrom"]).cmp(text(&b["validFrom"])));
+        turmas.push(json!({"name": turma["name"], "versions": versions}));
+    }
+    V::Array(turmas)
+}
+/// Carga regular de cada dia da semana na data `d`, em unidades da disciplina.
+///
+/// Prioridade: alteração pontual da semana (`weekOverrides`) > grade da turma
+/// vigente na data (`gradeTurmas`, preenchido por `grade_for`) > rotina da
+/// disciplina (fixa ou alternada A/B).
+pub(crate) fn schedule(c: &V, d: NaiveDate) -> Result<V, String> {
     let w = week(d);
     for item in array(&c["weekOverrides"]) {
         if text(&item["weekStart"]) == w.to_string() {
-            return Ok(&item["schedule"]);
+            return Ok(item["schedule"].clone());
         }
+    }
+    let day = d.to_string();
+    let mut from_grade = serde_json::Map::new();
+    let mut graded = false;
+    for turma in array(&c["gradeTurmas"]) {
+        let mut current = None;
+        for v in array(&turma["versions"]) {
+            date(text(&v["validFrom"]))?;
+            if text(&v["validFrom"]) <= day.as_str() {
+                current = Some(v);
+            }
+        }
+        if let Some(v) = current {
+            graded = true;
+            if let Some(m) = v["schedule"].as_object() {
+                for (k, n) in m {
+                    let total = num(from_grade.get(k).unwrap_or(&V::Null)) + num(n);
+                    from_grade.insert(k.clone(), json!(total));
+                }
+            }
+        }
+    }
+    if graded {
+        return Ok(V::Object(from_grade));
     }
     if text(&c["scheduleMode"]) == "alternating" && !text(&c["weekAnchor"]).is_empty() {
         let offset = (w - week(date(text(&c["weekAnchor"]))?)).num_days() / 7;
         if offset.rem_euclid(2) == 1 {
-            return Ok(&c["scheduleB"]);
+            return Ok(c["scheduleB"].clone());
         }
     }
-    Ok(&c["schedule"])
+    Ok(c["schedule"].clone())
 }
 /// Tolerância (em minutos) para resíduos de ponto flutuante: cargas com
 /// frações de hora (ex.: 1,33 h × 50 min) podem somar 3999,9999999 em vez de 4000.
@@ -165,6 +231,7 @@ pub fn projections_with_issues(data: &V) -> Result<(V, V), String> {
             continue;
         }
         let mut c = course.clone();
+        c["gradeTurmas"] = grade_for(data, &course["id"]);
         c["start"] = cal["start"].clone();
         c["end"] = cal["end"].clone();
         let mut blocked: Vec<V> = array(&cal["entries"]).into_iter().cloned().collect();
@@ -254,5 +321,68 @@ mod tests {
         let r = forecast(&c, &json!([])).unwrap();
         assert_eq!(r["complete"], true);
         assert_eq!(r["deficit"], 0.0);
+    }
+    fn grade_data() -> V {
+        json!({"version":4,"professors":[],
+        "calendars":[{"id":"cal","start":"2026-10-19","end":"2026-11-30","entries":[]}],
+        "courses":[{"id":"mat","calendarId":"cal","total":20,"done":0,"unit":50,"schedule":{"5":9}}],
+        "turmas":[{"id":"t","name":"501","versions":[
+            {"validFrom":"2026-11-02","grid":{"3":["mat","mat","mat"]}},
+            {"validFrom":"2026-10-01","grid":{"1":["mat","mat","port"],"2":["port"]}}
+        ]}]})
+    }
+    fn days_of(r: &V) -> Vec<(String, f64)> {
+        r["rows"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|x| {
+                (
+                    x["day"].as_str().unwrap().to_string(),
+                    x["minutes"].as_f64().unwrap(),
+                )
+            })
+            .collect()
+    }
+    #[test]
+    fn grade_versions_drive_the_schedule_by_date() {
+        let days = days_of(&projections(&grade_data()).unwrap()["mat"]);
+        // Até 01/11: segundas com 2 aulas (a rotina própria de sexta é ignorada).
+        assert_eq!(days[0], ("2026-10-19".to_string(), 100.0));
+        assert_eq!(days[1], ("2026-10-26".to_string(), 100.0));
+        // A partir de 02/11: quartas com 3 aulas, nenhuma segunda.
+        assert_eq!(days[2], ("2026-11-04".to_string(), 150.0));
+        assert!(days.iter().all(|(d, _)| d != "2026-11-02"));
+    }
+    #[test]
+    fn course_without_grade_keeps_its_routine_and_overrides_win() {
+        let mut data = grade_data();
+        data["turmas"] = json!([]);
+        assert_eq!(
+            projections(&data).unwrap()["mat"]["rows"][0]["day"],
+            "2026-10-23"
+        );
+        let mut data = grade_data();
+        data["courses"][0]["weekOverrides"] =
+            json!([{"weekStart":"2026-11-02","schedule":{"4":1}}]);
+        let days = days_of(&projections(&data).unwrap()["mat"]);
+        assert!(days.iter().any(|(d, _)| d == "2026-11-05"));
+        assert!(days.iter().all(|(d, _)| d != "2026-11-04"));
+    }
+    #[test]
+    fn grade_before_first_version_uses_course_routine() {
+        let mut data = grade_data();
+        data["turmas"][0]["versions"] = json!([{"validFrom":"2026-11-02","grid":{"3":["mat"]}}]);
+        let r = &projections(&data).unwrap()["mat"];
+        assert_eq!(r["rows"][0]["day"], "2026-10-23");
+        assert_eq!(r["rows"][0]["minutes"], 450.0);
+    }
+    #[test]
+    fn invalid_grade_date_is_a_course_issue() {
+        let mut data = grade_data();
+        data["turmas"][0]["versions"][0]["validFrom"] = json!("2026-02-30");
+        let (f, issues) = projections_with_issues(&data).unwrap();
+        assert!(f["mat"].is_null());
+        assert!(issues["mat"].as_str().unwrap().contains("Data inválida"));
     }
 }

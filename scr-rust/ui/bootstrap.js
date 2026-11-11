@@ -39,6 +39,7 @@
     'group-preview-model.js',
     'group-preview.js',
     'reports.js',
+    'turmas.js',
   ])
     await new Promise((resolve, reject) => {
       const script = document.createElement('script');

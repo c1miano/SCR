@@ -1473,6 +1473,98 @@ progress::-moz-progress-bar {
   color: var(--text-subtle);
 }
 
+/* ---------- Turmas e grade semanal ---------- */
+.turma-form.inline-form {
+  grid-template-columns: minmax(0, 2fr) minmax(120px, 1fr) auto;
+}
+.grade-toolbar label {
+  max-width: 460px;
+  margin-bottom: 14px;
+}
+.grade-wrap {
+  margin-bottom: 14px;
+}
+table.grade {
+  min-width: 980px;
+  table-layout: fixed;
+}
+table.grade th:first-child {
+  width: 150px;
+}
+table.grade td {
+  padding: 6px;
+  border-right: 1px solid var(--border);
+}
+table.grade td:last-child {
+  border-right: 0;
+}
+table.grade tbody tr:hover {
+  background: transparent;
+}
+table.grade td.filled {
+  background: var(--primary-soft);
+}
+table.grade select {
+  min-height: 36px;
+  padding: 6px 8px;
+  font-size: 0.85rem;
+}
+table.grade td.filled select {
+  border-color: color-mix(in srgb, var(--primary) 45%, var(--border));
+  font-weight: 600;
+}
+.grade-time strong {
+  display: block;
+  font-size: 0.83rem;
+  margin-bottom: 4px;
+}
+.grade-times {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+}
+.grade-times input {
+  min-height: 30px;
+  padding: 2px 4px;
+  font-size: 0.78rem;
+}
+.grade-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+.grade-summary .tag {
+  font-size: 0.8rem;
+  padding: 3px 10px;
+}
+.grade-save {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 16px;
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  margin-bottom: 12px;
+}
+.grade-save label {
+  min-width: 200px;
+}
+#turma-message:empty {
+  display: none;
+}
+#turma-message {
+  font-weight: 600;
+  color: var(--primary);
+}
+.grade-note {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+
 /* ---------- Inicialização e erro ---------- */
 .startup-status {
   position: fixed;
@@ -1549,4 +1641,11 @@ progress::-moz-progress-bar {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/* O logo é um SVG com traço preto fixo; no tema escuro ele é invertido para
+   ficar claro sobre as superfícies escuras. */
+html[data-theme='dark'] .app-logo,
+html[data-theme='dark'] .startup-status img {
+  filter: invert(0.92);
 }
