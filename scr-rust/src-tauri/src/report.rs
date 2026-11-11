@@ -323,7 +323,6 @@ pub(crate) const FINISH: Tone = Tone {
     accent: "#15803d",
 };
 const CARD_LINE: f64 = 9.0;
-const CARD_TEXT: f64 = 104.0 - 12.0;
 
 fn push_card(cards: &mut Vec<(Vec<String>, Tone)>, lines: Vec<String>, tone: Tone) {
     for (i, chunk) in lines.chunks(14).enumerate() {
@@ -365,9 +364,22 @@ fn calendar_pdf(data: &Value, report: &Report, month: &str, pdf: &mut Pdf) -> Re
     let projections = engine::projections(data)?;
     let reference = date(&report.reference).ok();
     let title = format!("{} {}", MONTHS[(first.month() - 1) as usize], first.year());
-    let col_w = (PAGE_W - 2.0 * MARGIN) / 7.0;
+    // Sábado e domingo só aparecem quando há aula (grade, rotina ou aula extra) nesse dia.
+    let used = |weekday: usize| {
+        report.courses.iter().filter(|c| !c.complete).any(|c| {
+            c.rows.iter().any(|r| {
+                r.day.starts_with(month)
+                    && (r.status != "Sem aula regular" || !r.events.is_empty())
+                    && date(&r.day)
+                        .is_ok_and(|d| d.weekday().num_days_from_monday() as usize == weekday)
+            })
+        })
+    };
+    let cols: Vec<usize> = (0..7).filter(|&c| c < 5 || used(c)).collect();
+    let col_w = (PAGE_W - 2.0 * MARGIN) / cols.len() as f64;
+    let card_text = col_w - 18.0;
 
-    fn heading(pdf: &mut Pdf, title: &str, report: &Report, col_w: f64) {
+    fn heading(pdf: &mut Pdf, title: &str, report: &Report, cols: &[usize], col_w: f64) {
         pdf.next();
         pdf.heading(
             title,
@@ -384,18 +396,22 @@ fn calendar_pdf(data: &Value, report: &Report, month: &str, pdf: &mut Pdf) -> Re
             SURFACE_2,
             Some(LINE),
         );
-        for (i, label) in ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"]
-            .iter()
-            .enumerate()
-        {
-            pdf.label_at(MARGIN + 7.0 + i as f64 * col_w, y, label, 7.5, SUBTLE);
+        let labels = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
+        for (i, col) in cols.iter().enumerate() {
+            pdf.label_at(
+                MARGIN + 7.0 + i as f64 * col_w,
+                y,
+                labels[*col],
+                7.5,
+                SUBTLE,
+            );
         }
         pdf.y -= 6.0;
     }
-    heading(pdf, &title, report, col_w);
+    heading(pdf, &title, report, &cols, col_w);
     for week in 0..(offset + days).div_ceil(7) {
         let mut cells = Vec::new();
-        for col in 0..7 {
+        for &col in &cols {
             let idx = week * 7 + col;
             let day = if idx >= offset && idx < offset + days {
                 Some(first + Duration::days((idx - offset) as i64))
@@ -423,7 +439,7 @@ fn calendar_pdf(data: &Value, report: &Report, month: &str, pdf: &mut Pdf) -> Re
                                     }
                                 })
                                 .unwrap_or(0.0);
-                            let mut lines = wrap(&course.name, 7.5, true, CARD_TEXT);
+                            let mut lines = wrap(&course.name, 7.5, true, card_text);
                             lines.push(format!(
                                 "{} {} · {}",
                                 amount(minutes / course.unit),
@@ -436,7 +452,7 @@ fn calendar_pdf(data: &Value, report: &Report, month: &str, pdf: &mut Pdf) -> Re
                                     "Prevista"
                                 }
                             ));
-                            lines.extend(wrap(&course.people, 7.5, false, CARD_TEXT));
+                            lines.extend(wrap(&course.people, 7.5, false, card_text));
                             if s(&projections[&course.id]["finish"]) == key {
                                 lines.push("Conclusão prevista".into());
                             }
@@ -450,14 +466,14 @@ fn calendar_pdf(data: &Value, report: &Report, month: &str, pdf: &mut Pdf) -> Re
                             push_card(&mut cards, lines, tone);
                         }
                         for event in &row.events {
-                            let mut lines = wrap(&course.name, 7.5, true, CARD_TEXT);
+                            let mut lines = wrap(&course.name, 7.5, true, card_text);
                             // "Motivo: detalhe" -> motivo numa linha e detalhe abaixo.
                             match event.text.split_once(": ") {
                                 Some((kind, detail)) => {
-                                    lines.extend(wrap(&format!("{kind}:"), 7.5, false, CARD_TEXT));
-                                    lines.extend(wrap(detail, 7.5, false, CARD_TEXT));
+                                    lines.extend(wrap(&format!("{kind}:"), 7.5, false, card_text));
+                                    lines.extend(wrap(detail, 7.5, false, card_text));
                                 }
-                                None => lines.extend(wrap(&event.text, 7.5, false, CARD_TEXT)),
+                                None => lines.extend(wrap(&event.text, 7.5, false, card_text)),
                             }
                             push_card(
                                 &mut cards,
@@ -468,19 +484,23 @@ fn calendar_pdf(data: &Value, report: &Report, month: &str, pdf: &mut Pdf) -> Re
                     }
                 }
             }
-            cells.push((day, cards));
+            cells.push((col, day, cards));
+        }
+        // Semana cujos dias visíveis são todos de outro mês (ex.: só o domingo 1º).
+        if cells.iter().all(|(_, day, _)| day.is_none()) {
+            continue;
         }
         // Semanas muito cheias continuam em outra folha em vez de cortar aulas.
         let max_cards = cells
             .iter()
-            .map(|(_, cards)| cards.len())
+            .map(|(_, _, cards)| cards.len())
             .max()
             .unwrap_or(0);
         let batches = max_cards.max(1).div_ceil(2);
         for batch in 0..batches {
             let height = cells
                 .iter()
-                .map(|(_, cards)| {
+                .map(|(_, _, cards)| {
                     cards
                         .iter()
                         .skip(batch * 2)
@@ -491,12 +511,12 @@ fn calendar_pdf(data: &Value, report: &Report, month: &str, pdf: &mut Pdf) -> Re
                 })
                 .fold(56.0, f64::max);
             if pdf.y - height < BOTTOM {
-                heading(pdf, &format!("{title} - continuação"), report, col_w);
+                heading(pdf, &format!("{title} - continuação"), report, &cols, col_w);
             }
             let top = pdf.y;
-            for (col, (day, cards)) in cells.iter().enumerate() {
-                let x = MARGIN + col as f64 * col_w;
-                let weekend = col >= 5;
+            for (i, (col, day, cards)) in cells.iter().enumerate() {
+                let x = MARGIN + i as f64 * col_w;
+                let weekend = *col >= 5;
                 let fill = match day {
                     None => BG,
                     Some(_) if weekend => BG,
@@ -814,6 +834,25 @@ mod tests {
         assert_eq!(row.minutes, 60.0);
         assert_eq!(row.status, "Conferir registro");
         assert!(row.reason.contains("Reunião pedagógica"));
+    }
+    #[test]
+    fn weekend_columns_only_when_there_are_lessons() {
+        let pdf = String::from_utf8(generate(&data(), &filter("professor", "p")).unwrap()).unwrap();
+        assert!(!pdf.contains(&literal("SÁB")));
+        assert!(!pdf.contains(&literal("DOM")));
+        // Aula extra num sábado: só a coluna de sábado aparece.
+        let mut d = data();
+        d["professors"][0]["extras"] =
+            json!([{"date":"2026-10-31","courseId":"c","hours":1,"unit":60}]);
+        let pdf = String::from_utf8(generate(&d, &filter("professor", "p")).unwrap()).unwrap();
+        assert!(pdf.contains(&literal("SÁB")));
+        assert!(!pdf.contains(&literal("DOM")));
+        // Aula regular no domingo (grade ou rotina).
+        let mut d = data();
+        d["courses"][0]["schedule"] = json!({"1":2,"0":2});
+        let pdf = String::from_utf8(generate(&d, &filter("professor", "p")).unwrap()).unwrap();
+        assert!(pdf.contains(&literal("DOM")));
+        assert!(!pdf.contains(&literal("SÁB")));
     }
     #[test]
     fn weekly_override_uses_actual_schedule() {

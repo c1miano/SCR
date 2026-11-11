@@ -111,4 +111,4 @@ Menu **Turmas e grades**: cada turma tem uma grade semanal (aulas por dia × seg
 
 ## Visual dos PDFs
 
-O calendário de registros e a grade da turma usam as cores e a tipografia da interface (`src-tauri/src/pdf.rs` repete os tokens de `ui/app.css`): marca SCR em teal, cartões de aula com faixa lateral colorida (azul ministrada, cinza prevista, roxo conferir, laranja ausência, amarelo feriado), fim de semana em fundo neutro, data de referência destacada e legenda em uma linha.
+O calendário de registros e a grade da turma usam as cores e a tipografia da interface (`src-tauri/src/pdf.rs` repete os tokens de `ui/app.css`): marca SCR em teal, cartões de aula com faixa lateral colorida (azul ministrada, cinza prevista, roxo conferir, laranja ausência, amarelo feriado), sábado e domingo só aparecem quando há aula nesses dias (pela grade, rotina ou aula extra), data de referência destacada e legenda em uma linha.
