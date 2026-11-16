@@ -1657,3 +1657,43 @@ html[data-theme='dark'] .app-logo,
 html[data-theme='dark'] .startup-status img {
   filter: invert(0.92);
 }
+
+/* Versão web: diálogo de cópias automáticas (criado por web/api.js). */
+.web-dialog {
+  width: min(560px, calc(100vw - 32px));
+  max-height: calc(100vh - 64px);
+  padding: 20px;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.web-dialog::backdrop {
+  background: rgb(15 43 40 / 0.45);
+}
+.web-dialog h2 {
+  margin: 0 0 8px;
+  font-size: 1.1rem;
+}
+.web-copies {
+  display: grid;
+  gap: 8px;
+  margin: 14px 0;
+}
+.web-copy {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-2);
+}
+.web-copy div {
+  display: grid;
+}
+.web-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+}
