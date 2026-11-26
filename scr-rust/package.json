@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "tauri dev",
     "build": "tauri build",
-    "test": "cargo test --manifest-path src-tauri/Cargo.toml && node scripts/test-reports.cjs",
+    "test": "cargo test --manifest-path src-tauri/Cargo.toml && node scripts/test-reports.cjs && node scripts/test-preview.cjs",
     "format": "cargo fmt --manifest-path src-tauri/Cargo.toml && npx --yes prettier@3.3.3 --write \"ui/*.js\" \"ui/*.css\" \"scripts/*.cjs\""
   },
   "devDependencies": {

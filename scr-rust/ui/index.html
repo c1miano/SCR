@@ -228,7 +228,7 @@
             <div class="page-heading">
               <span class="eyebrow">Planejamento mensal</span>
               <h1>Prévia por turma</h1>
-              <p>Veja as aulas previstas e ministradas das disciplinas que ainda não concluíram a carga horária.</p>
+              <p>Veja as aulas previstas e ministradas da turma, com feriados, dias não letivos, ausências e aulas extras.</p>
             </div>
             <div id="preview-no-groups" class="notice">
               Para usar esta prévia, preencha as tags de turma no cadastro das disciplinas.
@@ -257,6 +257,7 @@
                 <div><strong id="preview-count">0</strong><span>aulas no mês</span></div>
                 <div><strong id="preview-subjects">0</strong><span>disciplinas no mês</span></div>
                 <div><strong id="preview-days">0</strong><span>dias com aulas</span></div>
+                <div class="stat-short"><strong id="preview-short">0</strong><span id="preview-short-label">dia(s) letivo(s) com menos de 4h</span></div>
               </div>
               <div id="preview-warning" class="notice warn" hidden></div>
               <p id="preview-empty" class="notice" role="status" hidden></p>
@@ -265,7 +266,11 @@
                 <h2 id="preview-title"></h2>
                 <div class="preview-legend" aria-label="Legenda das aulas">
                   <span><i class="legend-planned"></i>Prevista</span><span><i class="legend-completed"></i>Ministrada</span
-                  ><span><i class="legend-final"></i>Conclusão</span>
+                  ><span><i class="legend-final"></i>Conclusão</span
+                  ><span><i class="legend-holiday"></i>Feriado / não letivo</span
+                  ><span><i class="legend-absence"></i>Ausência / cancelamento</span
+                  ><span><i class="legend-extra"></i>Aula extra</span
+                  ><span><i class="legend-short"></i>Dia com menos de 4h</span>
                 </div>
               </div>
               <div class="month-scroll">
@@ -276,8 +281,9 @@
               </div>
               <p class="help">
                 Clique em uma aula para abrir a disciplina. Aulas já ministradas aparecem em azul e com a identificação “Ministrada”. O último
-                encontro mostra apenas a carga necessária para concluir; depois dele, a disciplina sai da prévia. Ao cumprir a carga total, ela
-                deixa de aparecer em todos os meses. Os registros permanecem no cadastro da disciplina.
+                encontro mostra apenas a carga necessária para concluir; depois dele, não há novas aulas previstas. Disciplinas com a carga
+                cumprida continuam aparecendo apenas nas aulas marcadas como ministradas, que seguem contando no total do dia. Dias letivos
+                (segunda a sexta, fora de feriados e dias não letivos) com menos de 4 horas de aula ficam com contorno vermelho.
               </p>
             </div>
           </section>

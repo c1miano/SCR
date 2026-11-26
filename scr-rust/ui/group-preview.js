@@ -26,7 +26,7 @@ function openGroupPreview() {
 function renderGroupPreview() {
   const month = $('#preview-month').value,
     group = $('#preview-group').value;
-  const result = GroupPreview.collect(data.courses, group, month, forecast),
+  const result = GroupPreview.preview(data, group, month, forecast),
     grid = $('#preview-grid');
   grid.replaceChildren();
   const cells = GroupPreview.monthCells(month);
@@ -37,18 +37,27 @@ function renderGroupPreview() {
   $('#preview-count').textContent = String(result.entries.length);
   $('#preview-subjects').textContent = String(new Set(result.entries.map((x) => x.courseId)).size);
   $('#preview-days').textContent = String(new Set(result.entries.map((x) => x.day)).size);
+  const shortDays = Object.values(result.days).filter((x) => x.short).length;
+  $('#preview-short').textContent = String(shortDays);
+  $('#preview-short-label').textContent =
+    `dia(s) letivo(s) com menos de ${GroupPreview.hoursLabel(GroupPreview.MIN_DAILY_MINUTES)}`;
   $('#preview-warning').hidden = !result.missingCalendar.length;
   $('#preview-warning').textContent =
     'Defina o calendário e seu período para incluir: ' + result.missingCalendar.join(', ') + '.';
-  $('#preview-empty').hidden = !group || result.entries.length > 0;
+  $('#preview-empty').hidden = !group || result.entries.length > 0 || result.events.length > 0;
   $('#preview-empty').textContent = 'Nenhuma aula registrada ou prevista para esta turma neste mês.';
   $('#preview-completed').textContent = result.completed
-    ? `${result.completed} disciplina(s) com carga cumprida foram retiradas desta prévia.`
+    ? `${result.completed} disciplina(s) com carga cumprida: aparecem só as aulas marcadas como ministradas.`
     : '';
   const byDate = new Map();
   for (const item of result.entries) {
     if (!byDate.has(item.day)) byDate.set(item.day, []);
     byDate.get(item.day).push(item);
+  }
+  const eventsByDate = new Map();
+  for (const item of result.events) {
+    if (!eventsByDate.has(item.day)) eventsByDate.set(item.day, []);
+    eventsByDate.get(item.day).push(item);
   }
   for (const day of cells) {
     if (!day) {
@@ -58,13 +67,53 @@ function renderGroupPreview() {
       grid.append(blank);
       continue;
     }
+    const load = result.days[day] || { minutes: 0, required: false, short: false };
     const cell = document.createElement('section');
-    cell.className = 'month-day' + (day === localToday() ? ' is-today' : '');
+    cell.className =
+      'month-day' + (day === localToday() ? ' is-today' : '') + (load.short ? ' is-short' : '');
     cell.dataset.date = day;
-    cell.setAttribute('aria-label', pretty(day));
+    const minimum = GroupPreview.hoursLabel(GroupPreview.MIN_DAILY_MINUTES);
+    cell.setAttribute(
+      'aria-label',
+      pretty(day) +
+        (load.minutes > 0 ? ', ' + GroupPreview.hoursLabel(load.minutes) + ' de aula' : '') +
+        (load.short ? ', menos de ' + minimum + ' de aula' : ''),
+    );
+    const head = document.createElement('div');
+    head.className = 'month-day-head';
     const number = document.createElement('h3');
     number.textContent = String(Number(day.slice(-2)));
-    cell.append(number);
+    head.append(number);
+    if (load.required || load.minutes > 0) {
+      const total = document.createElement('small');
+      total.className = 'day-total';
+      total.textContent = GroupPreview.hoursLabel(load.minutes);
+      total.title = load.short
+        ? `Menos de ${minimum} de aula neste dia`
+        : 'Total de aulas no dia (horas de 60 minutos)';
+      head.append(total);
+    }
+    cell.append(head);
+    const dayEvents = eventsByDate.get(day) || [];
+    for (const event of dayEvents) {
+      const box = document.createElement(event.courseId ? 'button' : 'div');
+      if (event.courseId) {
+        box.type = 'button';
+        box.onclick = () => openCourse(event.courseId);
+      }
+      box.className = 'preview-event is-' + event.kind;
+      const label = document.createElement('strong');
+      label.textContent = event.label;
+      const detail = document.createElement('small');
+      detail.textContent =
+        event.kind === 'extra'
+          ? `${event.detail} · ${fmt(event.hours)} ${event.unit === 60 ? 'h' : 'h-aula'}`
+          : event.detail;
+      box.append(label);
+      if (detail.textContent) box.append(detail);
+      box.setAttribute('aria-label', event.label + (detail.textContent ? ': ' + detail.textContent : ''));
+      cell.append(box);
+    }
     const entries = byDate.get(day) || [];
     for (const entry of entries) {
       const card = button(
@@ -110,7 +159,7 @@ function renderGroupPreview() {
       }
       cell.append(card);
     }
-    if (!entries.length) {
+    if (!entries.length && !dayEvents.length) {
       const empty = document.createElement('span');
       empty.className = 'day-empty';
       empty.textContent = '—';
