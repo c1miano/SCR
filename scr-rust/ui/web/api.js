@@ -15,6 +15,7 @@
   const PREVIOUS = 'scr-dados.backup';
   const STORAGE_LABEL = 'neste navegador. Exporte backups com frequência.';
   const base = document.currentScript.src.replace(/[^/]*$/, '');
+  const assetVersion = (document.currentScript.src.match(/\?v=[^&#]*/) || [''])[0];
   let modules = null;
   function loadModules() {
     if (!modules)
@@ -24,7 +25,7 @@
             () =>
               new Promise((resolve, reject) => {
                 const s = document.createElement('script');
-                s.src = base + file;
+                s.src = base + file + assetVersion;
                 s.onload = resolve;
                 s.onerror = () => reject('Falha ao carregar ' + file);
                 document.head.append(s);

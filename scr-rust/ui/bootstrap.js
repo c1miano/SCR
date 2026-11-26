@@ -1,3 +1,6 @@
+// Repassa aos scripts carregados a versão do site (?v=...), se houver: na
+// versão web cada publicação usa endereços novos e o navegador não usa cache antigo.
+const scrAssetVersion = (document.currentScript?.src.match(/\?v=[^&#]*/) || [''])[0];
 (async () => {
   document.body.inert = true;
   const diagnostic = (message) => window.__TAURI__.core.invoke('ui_diagnostic', { message: String(message) });
@@ -43,7 +46,7 @@
   ])
     await new Promise((resolve, reject) => {
       const script = document.createElement('script');
-      script.src = file;
+      script.src = file + scrAssetVersion;
       script.onload = () => {
         diagnostic('loaded ' + file);
         resolve();
