@@ -119,3 +119,13 @@ O calendário de registros e a grade da turma usam as cores e a tipografia da in
 - **Ocorrências na grade.** Feriados e dias não letivos (amarelo), ausências de professores e cancelamentos da disciplina (laranja) e aulas extras (verde) aparecem nos dias correspondentes. A aula extra que já aparece no cartão da disciplina (marcada “Extra”) não se repete.
 - **Disciplinas concluídas.** Não saem mais da prévia: aparecem apenas as aulas marcadas como ministradas, inclusive as dadas depois de 100%, e essas aulas contam no total do dia.
 - `node scripts/test-preview.cjs` testa essas regras com o núcleo JS. O calendário em PDF ainda não foi alterado.
+
+## Interface: celular e acessibilidade
+
+Revisão guiada pelo checklist da skill UI/UX Pro Max (estilo Minimalismo/Swiss com paleta teal, que confirmou a direção visual atual):
+
+- **Celular (até 760px):** o menu lateral vira uma gaveta aberta pelo botão ☰ (fecha com Esc, com o fundo escurecido ou ao escolher uma tela; fechada, sai da ordem de foco). O botão de tema mostra só o ícone. Formulários ficam em uma coluna.
+- **Até 640px:** tabelas viram cartões, um por linha, com o título de cada coluna, e a prévia mensal vira uma lista de dias (sem fins de semana vazios). Nenhuma tela tem rolagem horizontal em 375px.
+- **Contraste:** o texto secundário do tema claro passou a `#5a6d6a` (≥ 4,5:1 em todas as superfícies).
+- **Tamanho mínimo de texto:** 12px.
+- **Teclado:** link “Pular para o conteúdo” no primeiro Tab.

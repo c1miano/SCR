@@ -27,7 +27,7 @@
   /* Texto */
   --text: #0f2b28;
   --text-muted: #4b5f5c;
-  --text-subtle: #6b7f7c;
+  --text-subtle: #5a6d6a;
 
   /* Marca e ação */
   --primary: #0f766e;
@@ -230,12 +230,12 @@ a {
   letter-spacing: 0.02em;
 }
 .brand-text small {
-  font-size: 0.73rem;
+  font-size: 0.8rem;
   color: var(--text-muted);
 }
 .aside-title {
   display: block;
-  font-size: 0.73rem;
+  font-size: 0.8rem;
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -447,7 +447,7 @@ footer span {
 .eyebrow {
   display: block;
   margin-bottom: 6px;
-  font-size: 0.73rem;
+  font-size: 0.8rem;
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -939,7 +939,7 @@ details.week-exceptions .week {
   background: var(--surface-2);
   border: 1px solid var(--border);
   color: var(--text-muted);
-  font-size: 0.75rem;
+  font-size: 0.8rem;
 }
 
 /* ---------- Tabelas ---------- */
@@ -959,7 +959,7 @@ th {
   padding: 10px 14px;
   background: var(--surface-2);
   color: var(--text-muted);
-  font-size: 0.75rem;
+  font-size: 0.8rem;
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -1220,7 +1220,7 @@ progress::-moz-progress-bar {
   border-radius: var(--radius);
 }
 .metric small {
-  font-size: 0.73rem;
+  font-size: 0.8rem;
   font-weight: 600;
   letter-spacing: 0.06em;
   color: var(--text-subtle);
@@ -1378,7 +1378,7 @@ progress::-moz-progress-bar {
 .month-weekdays span {
   padding: 10px 4px;
   text-align: center;
-  font-size: 0.75rem;
+  font-size: 0.8rem;
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -1450,7 +1450,7 @@ progress::-moz-progress-bar {
 }
 .preview-lesson span,
 .preview-lesson small {
-  font-size: 0.75rem;
+  font-size: 0.8rem;
   line-height: 1.4;
   color: var(--text-muted);
 }
@@ -1487,7 +1487,7 @@ progress::-moz-progress-bar {
   margin: 0;
 }
 .day-total {
-  font-size: 0.72rem;
+  font-size: 0.8rem;
   font-weight: 600;
   color: var(--text-subtle);
   font-variant-numeric: tabular-nums;
@@ -1528,11 +1528,11 @@ button.preview-event:hover {
   box-shadow: var(--shadow-pop);
 }
 .preview-event strong {
-  font-size: 0.75rem;
+  font-size: 0.8rem;
   font-weight: 700;
 }
 .preview-event small {
-  font-size: 0.72rem;
+  font-size: 0.8rem;
   line-height: 1.35;
   color: inherit;
 }
@@ -1566,7 +1566,7 @@ button.preview-event:hover {
   border: 2px solid var(--danger);
 }
 .day-empty {
-  font-size: 0.75rem;
+  font-size: 0.8rem;
   color: var(--text-subtle);
 }
 
@@ -1631,7 +1631,7 @@ table.grade td.filled select {
 .grade-times input {
   min-height: 30px;
   padding: 2px 4px;
-  font-size: 0.78rem;
+  font-size: 0.8rem;
 }
 .grade-summary {
   display: flex;
@@ -1733,6 +1733,242 @@ table.grade td.filled select {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
   .brand-text small {
+    display: none;
+  }
+}
+
+/* ---------- Acesso por teclado ---------- */
+.skip-link {
+  position: fixed;
+  top: 8px;
+  left: 50%;
+  z-index: 100;
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  background: var(--primary);
+  color: var(--on-primary);
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+  transform: translate(-50%, -160%);
+  transition: transform var(--dur) var(--ease);
+}
+.skip-link:focus {
+  transform: translate(-50%, 0);
+}
+main:focus {
+  outline: none;
+}
+.menu-toggle {
+  display: none;
+}
+
+/* ---------- Celular e janelas estreitas ---------- */
+@media (max-width: 760px) {
+  .app-shell {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .sidebar {
+    position: fixed;
+    inset: 0 auto 0 0;
+    z-index: 40;
+    width: min(300px, 86vw);
+    height: 100dvh;
+    transform: translateX(-100%);
+    transition: transform 220ms var(--ease);
+  }
+  body.sidebar-open {
+    overflow: hidden;
+  }
+  body.sidebar-open .sidebar {
+    transform: none;
+    box-shadow: 0 0 40px rgb(0 0 0 / 0.25);
+  }
+  .brand-text small {
+    display: block;
+  }
+  .sidebar-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 30;
+    background: rgb(0 0 0 / 0.45);
+  }
+  .menu-toggle {
+    display: inline-grid;
+    width: 40px;
+    height: 40px;
+    flex-shrink: 0;
+  }
+  .menu-toggle .icon {
+    width: 20px;
+    height: 20px;
+  }
+  .topbar {
+    padding: 0 12px;
+    gap: 10px;
+  }
+  .breadcrumb {
+    flex: 1;
+    min-width: 0;
+  }
+  .breadcrumb > :not(#page-title) {
+    display: none;
+  }
+  #page-title {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  /* Só o ícone do tema; o texto continua como nome acessível. */
+  #theme-toggle {
+    width: 40px;
+    padding: 0;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .theme-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  main {
+    padding: 16px 16px 28px;
+  }
+}
+
+@media (max-width: 640px) {
+  .inline-form,
+  #create-professor.inline-form,
+  .turma-form.inline-form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .inline-form > * {
+    min-width: 0;
+  }
+  input,
+  select,
+  textarea {
+    min-width: 0;
+    max-width: 100%;
+  }
+  /* Tabelas viram cartões: uma linha por cartão, com o título da coluna. */
+  .table-wrap:has(> table.stacked) {
+    overflow: visible;
+    border: 0;
+    border-radius: 0;
+  }
+  table.stacked,
+  table.stacked tbody,
+  table.stacked tr,
+  table.stacked td {
+    display: block;
+    width: 100%;
+  }
+  table.stacked thead {
+    display: none;
+  }
+  table.stacked tr {
+    margin-bottom: 10px;
+    padding: 6px 0;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+  }
+  table.stacked td {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    padding: 6px 14px;
+    border: 0;
+    text-align: right;
+  }
+  table.stacked td[data-label]::before {
+    content: attr(data-label);
+    flex-shrink: 0;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-align: left;
+  }
+  table.stacked td.cell-full {
+    display: block;
+    text-align: left;
+  }
+  /* A primeira coluna vira o título do cartão. */
+  table.stacked td:first-child {
+    display: block;
+    margin-bottom: 4px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border);
+    font-weight: 600;
+    text-align: left;
+  }
+  table.stacked td:first-child::before {
+    display: none;
+  }
+  table.stacked td.course-load {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    min-width: 0;
+  }
+  table.stacked td.course-load > span {
+    margin: 0;
+  }
+  table.stacked td.course-load > progress {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+}
+
+/* Prévia mensal: no celular a grade vira uma lista de dias. */
+.day-weekday {
+  display: none;
+}
+@media (max-width: 640px) {
+  .month-scroll {
+    overflow: visible;
+    border: 0;
+  }
+  .month-weekdays,
+  .month-blank,
+  .month-day.is-off {
+    display: none;
+  }
+  .month-grid {
+    display: block;
+    min-width: 0;
+  }
+  .month-day {
+    min-height: 0;
+    margin-bottom: 8px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+  }
+  .month-grid > :nth-child(7n) {
+    border-right: 1px solid var(--border);
+  }
+  .month-day.is-short {
+    outline-offset: -1px;
+  }
+  .month-day-head {
+    justify-content: flex-start;
+  }
+  .day-weekday {
+    display: inline;
+    font-size: 0.87rem;
+    font-weight: 600;
+    color: var(--text);
+    text-transform: capitalize;
+  }
+  .day-total {
+    margin-left: auto;
+    font-size: 0.87rem;
+  }
+  .day-empty {
     display: none;
   }
 }

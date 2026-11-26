@@ -83,7 +83,14 @@ function renderGroupPreview() {
     head.className = 'month-day-head';
     const number = document.createElement('h3');
     number.textContent = String(Number(day.slice(-2)));
-    head.append(number);
+    // Dia da semana: só aparece na lista do celular, onde não há cabeçalho de colunas.
+    const weekday = document.createElement('span');
+    weekday.className = 'day-weekday';
+    weekday.setAttribute('aria-hidden', 'true');
+    weekday.textContent = new Date(day + 'T12:00:00')
+      .toLocaleDateString('pt-BR', { weekday: 'long' })
+      .replace('-feira', '');
+    head.append(number, weekday);
     if (load.required || load.minutes > 0) {
       const total = document.createElement('small');
       total.className = 'day-total';
@@ -159,6 +166,7 @@ function renderGroupPreview() {
       }
       cell.append(card);
     }
+    if (!entries.length && !dayEvents.length && !load.required) cell.classList.add('is-off');
     if (!entries.length && !dayEvents.length) {
       const empty = document.createElement('span');
       empty.className = 'day-empty';

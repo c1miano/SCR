@@ -719,3 +719,52 @@ function renderSemesterRegister(results) {
     : 'Cadastre disciplinas para acompanhar.';
 }
 $('#filter-search').oninput = renderHome;
+
+// ---------- Menu lateral em telas estreitas (gaveta) ----------
+const narrowScreen = matchMedia('(max-width: 760px)');
+function setSidebar(open, restoreFocus = false) {
+  const sidebar = $('#sidebar'),
+    toggle = $('#menu-toggle');
+  const narrow = narrowScreen.matches;
+  open = open && narrow;
+  document.body.classList.toggle('sidebar-open', open);
+  // Fechada no celular, a gaveta sai da ordem de foco e do leitor de tela.
+  sidebar.inert = narrow && !open;
+  $('.sidebar-backdrop').hidden = !open;
+  toggle.setAttribute('aria-expanded', String(open));
+  toggle.setAttribute('aria-label', open ? 'Fechar menu' : 'Abrir menu');
+  if (open) sidebar.querySelector('.main-nav button')?.focus();
+  else if (restoreFocus) toggle.focus();
+}
+$('#menu-toggle').onclick = () => setSidebar(!document.body.classList.contains('sidebar-open'));
+$('.sidebar-backdrop').onclick = () => setSidebar(false, true);
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && document.body.classList.contains('sidebar-open')) setSidebar(false, true);
+});
+// Escolher um item do menu fecha a gaveta.
+$('#sidebar').addEventListener('click', (event) => {
+  if (narrowScreen.matches && event.target.closest('button, a')) setSidebar(false);
+});
+narrowScreen.addEventListener('change', () => setSidebar(false));
+setSidebar(false);
+
+// ---------- Tabelas em cartões no celular ----------
+// Cada célula recebe o título da coluna (data-label); o CSS mostra uma linha
+// por cartão em telas estreitas. A grade semanal das turmas fica de fora.
+function labelTable(table) {
+  const titles = [...table.querySelectorAll('thead th')].map((th) => th.textContent.replace('*', '').trim());
+  for (const row of table.tBodies[0]?.rows || [])
+    [...row.cells].forEach((cell, i) => {
+      if (cell.colSpan > 1) cell.classList.add('cell-full');
+      else if (titles[i]) cell.dataset.label = titles[i];
+    });
+}
+for (const table of document.querySelectorAll('.table-wrap table:not(.grade)')) {
+  table.classList.add('stacked');
+  labelTable(table);
+  if (table.tBodies[0])
+    new MutationObserver(() => labelTable(table)).observe(table.tBodies[0], {
+      childList: true,
+      subtree: true,
+    });
+}
