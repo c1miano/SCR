@@ -112,3 +112,10 @@ Menu **Turmas e grades**: cada turma tem uma grade semanal (aulas por dia × seg
 ## Visual dos PDFs
 
 O calendário de registros e a grade da turma usam as cores e a tipografia da interface (`src-tauri/src/pdf.rs` repete os tokens de `ui/app.css`): marca SCR em teal, cartões de aula com faixa lateral colorida (azul ministrada, cinza prevista, roxo conferir, laranja ausência, amarelo feriado), sábado e domingo só aparecem quando há aula nesses dias (pela grade, rotina ou aula extra), data de referência destacada e legenda em uma linha.
+
+## Prévia por turma: carga diária e ocorrências
+
+- **Mínimo de 4 horas por dia.** Dias letivos (segunda a sexta, dentro do período do calendário e fora de feriados e dias não letivos) com menos de 4 horas de relógio (240 minutos) de aula ficam com contorno vermelho. Cada dia mostra o total, e o resumo conta os dias abaixo do mínimo. O valor está em `MIN_DAILY_MINUTES` (`ui/group-preview-model.js`).
+- **Ocorrências na grade.** Feriados e dias não letivos (amarelo), ausências de professores e cancelamentos da disciplina (laranja) e aulas extras (verde) aparecem nos dias correspondentes. A aula extra que já aparece no cartão da disciplina (marcada “Extra”) não se repete.
+- **Disciplinas concluídas.** Não saem mais da prévia: aparecem apenas as aulas marcadas como ministradas, inclusive as dadas depois de 100%, e essas aulas contam no total do dia.
+- `node scripts/test-preview.cjs` testa essas regras com o núcleo JS. O calendário em PDF ainda não foi alterado.
