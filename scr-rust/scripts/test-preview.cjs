@@ -42,7 +42,8 @@ function data() {
         extras: [],
         completedLessons: [],
       },
-      // Concluída: só a aula ministrada (além dos 100%) aparece.
+      // Concluída pela carga anterior; a marcação antiga "Ministrada" de 09/11
+      // vira "Aula a mais" na conversão.
       {
         id: 'art',
         name: 'Artes',
@@ -60,19 +61,39 @@ function data() {
     ],
   };
 }
+// Data de referência fixa: aulas até 15/11/2026 contam como realizadas.
 const forecasts = (d) => {
-  const f = engine.projections(d);
+  const f = engine.projections(d, '2026-11-15');
   return (c) => f[c.id];
 };
 
 const d = data();
 const r = preview(d, 'Turma A', '2026-11', forecasts(d));
 
-// Concluída: conta e aparece somente com a aula ministrada.
+// Concluída: aparece só a aula marcada como aula a mais.
 const art = r.entries.filter((x) => x.courseId === 'art');
 assert.deepEqual(
-  art.map((x) => [x.day, x.completed]),
+  art.map((x) => [x.day, x.surplus]),
   [['2026-11-09', true]],
+);
+// Até a referência as aulas são realizadas; depois, previstas.
+const mat = (day) => r.entries.find((x) => x.courseId === 'mat' && x.day === day);
+assert.equal(mat('2026-11-13').past, true);
+assert.equal(mat('2026-11-16').past, false);
+// "Conferir" marca a aula sem mudar a carga.
+const d4 = data();
+d4.courses[0].reviewLessons = ['2026-11-13'];
+const r4 = preview(d4, 'Turma A', '2026-11', forecasts(d4));
+assert.equal(r4.entries.find((x) => x.courseId === 'mat' && x.day === '2026-11-13').review, true);
+assert.equal(r4.days['2026-11-13'].minutes, r.days['2026-11-13'].minutes);
+// Aula além da carga total: oculta até ser marcada como aula a mais.
+const d5 = data();
+d5.courses[1].completedLessons = [];
+d5.courses[1].surplusLessons = ['2026-11-16'];
+const r5 = preview(d5, 'Turma A', '2026-11', forecasts(d5));
+assert.deepEqual(
+  r5.entries.filter((x) => x.courseId === 'art').map((x) => [x.day, x.minutes, x.surplus]),
+  [['2026-11-16', 100, true]],
 );
 assert.equal(r.completed, 1);
 assert.equal(r.days['2026-11-09'].minutes, 340);

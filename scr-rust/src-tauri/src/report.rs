@@ -82,11 +82,12 @@ pub struct Report {
 }
 
 pub fn collect(data: &Value, f: &Filter) -> Result<Report, String> {
-    date(&f.reference)?;
+    let reference = date(&f.reference)?;
     if f.notes.chars().count() > 2000 {
         return Err("Use até 2000 caracteres na orientação.".into());
     }
-    let projections = engine::projections(data)?;
+    // Aulas até a data de referência contam como realizadas.
+    let projections = engine::projections_at(data, reference)?;
     let people = list(&data["professors"]);
     let label = match f.kind.as_str() {
         "professor" => people
@@ -129,12 +130,33 @@ pub fn collect(data: &Value, f: &Filter) -> Result<Report, String> {
         let unit_label = if unit == 60.0 { "h" } else { "h-aula" };
         let mut rows = Vec::new();
         for row in list(&r["rows"]) {
-            let completed = row["completed"] == true;
-            if !completed && n(&row["credited"]) <= 0.0 {
+            let surplus = row["surplus"] == true;
+            // Aulas além da carga total só entram marcadas como "Aula a mais".
+            if !surplus && n(&row["credited"]) <= 0.0 {
                 continue;
             }
-            let pending = s(&row["day"]) <= f.reference.as_str();
-            rows.push(Row{events:Vec::new(),day:s(&row["day"]).into(),minutes:n(&row["minutes"]),status:if completed{"Registrada"}else if pending{"Conferir registro"}else{"Prevista"}.into(),reason:if completed{"Marcada como ministrada no SCR."}else if pending{"Motivo não informado: aula prevista sem marcação. Confirmar se foi ministrada antes de registrar."}else{"Data futura em relação à referência; ainda não é pendência."}.into()});
+            let (status, reason) = if row["review"] == true {
+                (
+                    "Conferir registro",
+                    "Marcada para o professor conferir o registro.",
+                )
+            } else if surplus {
+                (
+                    "Aula a mais",
+                    "Aula além da carga total, marcada como aula a mais.",
+                )
+            } else if row["past"] == true {
+                ("Realizada", "Aula prevista até a data de referência.")
+            } else {
+                ("Prevista", "Data futura em relação à referência.")
+            };
+            rows.push(Row {
+                events: Vec::new(),
+                day: s(&row["day"]).into(),
+                minutes: n(&row[if surplus { "minutes" } else { "credited" }]),
+                status: status.into(),
+                reason: reason.into(),
+            });
         }
         if let Some(cal) = cal.filter(|_| !r.is_null()) {
             // Mesma carga diária das previsões, incluindo a grade da turma.
@@ -142,18 +164,18 @@ pub fn collect(data: &Value, f: &Filter) -> Result<Report, String> {
             graded["gradeTurmas"] = engine::grade_for(data, &c["id"]);
             let mut day = date(s(&cal["start"]))?;
             let end = date(s(&cal["end"]))?;
-            let last = if r["complete"] == true {
-                list(&r["rows"])
-                    .iter()
-                    .filter(|x| x["completed"] == true)
-                    .map(|x| s(&x["day"]))
-                    .max()
-                    .unwrap_or("")
-            } else if r["finish"].is_string() {
-                s(&r["finish"])
-            } else {
-                s(&cal["end"])
-            };
+            // Impedimentos só até a conclusão (ou a última aula a mais marcada).
+            let last = list(&r["rows"])
+                .iter()
+                .filter(|x| x["surplus"] == true)
+                .map(|x| s(&x["day"]))
+                .chain([if r["finish"].is_string() {
+                    s(&r["finish"])
+                } else {
+                    s(&cal["end"])
+                }])
+                .max()
+                .unwrap_or("");
             while day <= end {
                 let key = day.to_string();
                 let regular = n(&engine::schedule(&graded, day)?
@@ -232,7 +254,7 @@ pub fn collect(data: &Value, f: &Filter) -> Result<Report, String> {
         } else {
             format!("{} (condicionada à confirmação das pendências e à realização das aulas previstas).",pretty(s(&r["finish"])))
         };
-        courses.push(Course{id:s(&c["id"]).into(),complete:r["complete"]==true,unit,name:s(&c["name"]).into(),people:assigned.iter().map(|p|s(&p["name"])).collect::<Vec<_>>().join(", "),groups:list(&c["groups"]).iter().map(s).collect::<Vec<_>>().join(", "),period:cal.map(|cal|format!("{} | {} a {}",s(&cal["name"]),pretty(s(&cal["start"])),pretty(s(&cal["end"])))).unwrap_or_else(||"Calendário não vinculado".into()),summary:format!("Carga: {} / {} {} ({} minutos por unidade). Carga anterior ao período: {} {}.\n{} registradas | {} a conferir | {} futuras.",amount(n(&r["done"])/unit),amount(n(&c["total"])),unit_label,amount(unit),amount(n(&c["done"])),unit_label,counts("Registrada"),counts("Conferir registro"),counts("Prevista")),finish,rows});
+        courses.push(Course{id:s(&c["id"]).into(),complete:r["complete"]==true,unit,name:s(&c["name"]).into(),people:assigned.iter().map(|p|s(&p["name"])).collect::<Vec<_>>().join(", "),groups:list(&c["groups"]).iter().map(s).collect::<Vec<_>>().join(", "),period:cal.map(|cal|format!("{} | {} a {}",s(&cal["name"]),pretty(s(&cal["start"])),pretty(s(&cal["end"])))).unwrap_or_else(||"Calendário não vinculado".into()),summary:format!("Carga: {} / {} {} ({} minutos por unidade). Carga anterior ao período: {} {}.\n{} realizadas | {} a conferir | {} aulas a mais | {} futuras.",amount(n(&r["done"])/unit),amount(n(&c["total"])),unit_label,amount(unit),amount(n(&c["done"])),unit_label,counts("Realizada"),counts("Conferir registro"),counts("Aula a mais"),counts("Prevista")),finish,rows});
     }
     if courses.is_empty() {
         return Err("Nenhuma disciplina vinculada à seleção.".into());
@@ -317,6 +339,11 @@ pub(crate) const HOLIDAY: Tone = Tone {
     stroke: "#fde047",
     accent: "#ca8a04",
 };
+pub(crate) const SURPLUS: Tone = Tone {
+    fill: "#d5f5ef",
+    stroke: "#5eead4",
+    accent: "#0f766e",
+};
 pub(crate) const FINISH: Tone = Tone {
     fill: "#dcfce7",
     stroke: "#86efac",
@@ -361,12 +388,12 @@ fn calendar_pdf(data: &Value, report: &Report, month: &str, pdf: &mut Pdf) -> Re
     .ok_or("Mês inválido")?;
     let days = (next - first).num_days() as usize;
     let offset = first.weekday().num_days_from_monday() as usize;
-    let projections = engine::projections(data)?;
     let reference = date(&report.reference).ok();
+    let projections = engine::projections_at(data, date(&report.reference)?)?;
     let title = format!("{} {}", MONTHS[(first.month() - 1) as usize], first.year());
     // Sábado e domingo só aparecem quando há aula (grade, rotina ou aula extra) nesse dia.
     let used = |weekday: usize| {
-        report.courses.iter().filter(|c| !c.complete).any(|c| {
+        report.courses.iter().any(|c| {
             c.rows.iter().any(|r| {
                 r.day.starts_with(month)
                     && (r.status != "Sem aula regular" || !r.events.is_empty())
@@ -422,46 +449,28 @@ fn calendar_pdf(data: &Value, report: &Report, month: &str, pdf: &mut Pdf) -> Re
             if let Some(day) = day {
                 let key = day.to_string();
                 for course in &report.courses {
-                    if course.complete {
-                        continue;
-                    }
                     for row in course.rows.iter().filter(|r| r.day == key) {
                         if row.status != "Sem aula regular" {
-                            let original = list(&projections[&course.id]["rows"])
-                                .iter()
-                                .find(|r| s(&r["day"]) == key);
-                            let minutes = original
-                                .map(|r| {
-                                    if r["completed"] == true {
-                                        n(&r["minutes"])
-                                    } else {
-                                        n(&r["credited"])
-                                    }
-                                })
-                                .unwrap_or(0.0);
                             let mut lines = wrap(&course.name, 7.5, true, card_text);
                             lines.push(format!(
                                 "{} {} · {}",
-                                amount(minutes / course.unit),
+                                amount(row.minutes / course.unit),
                                 if course.unit == 60.0 { "h" } else { "h-aula" },
-                                if row.status == "Registrada" {
-                                    "Ministrada"
-                                } else if row.status == "Conferir registro" {
+                                if row.status == "Conferir registro" {
                                     "Conferir"
                                 } else {
-                                    "Prevista"
+                                    row.status.as_str()
                                 }
                             ));
                             lines.extend(wrap(&course.people, 7.5, false, card_text));
                             if s(&projections[&course.id]["finish"]) == key {
                                 lines.push("Conclusão prevista".into());
                             }
-                            let tone = if row.status == "Registrada" {
-                                TAUGHT
-                            } else if row.status == "Conferir registro" {
-                                REVIEW
-                            } else {
-                                PLANNED
+                            let tone = match row.status.as_str() {
+                                "Realizada" => TAUGHT,
+                                "Conferir registro" => REVIEW,
+                                "Aula a mais" => SURPLUS,
+                                _ => PLANNED,
                             };
                             push_card(&mut cards, lines, tone);
                         }
@@ -611,11 +620,12 @@ pub fn generate(data: &Value, f: &Filter) -> Result<Vec<u8>, String> {
     let report = collect(data, f)?;
     let mut pdf = Pdf::new("Calendário de aulas", "SCR · Relatório de acompanhamento");
     pdf.legend = vec![
-        ("Ministrada", TAUGHT),
+        ("Realizada", TAUGHT),
         ("Prevista", PLANNED),
-        ("Conferir registro", REVIEW),
+        ("Conferir", REVIEW),
+        ("Aula a mais", SURPLUS),
         ("Ausência / cancelamento", ABSENCE),
-        ("Feriado / dia não letivo", HOLIDAY),
+        ("Feriado / não letivo", HOLIDAY),
         ("Conclusão prevista", FINISH),
     ];
     for month in months {
@@ -638,7 +648,7 @@ mod tests {
     use super::*;
     use serde_json::json;
     fn data() -> Value {
-        json!({"version":4,"professors":[{"id":"p","name":"João","absences":[],"extras":[]}],"calendars":[{"id":"cal","name":"Semestre","start":"2026-10-19","end":"2026-11-30","entries":[{"start":"2026-10-21","end":"2026-10-21","type":"holiday","name":"Feriado"}]}],"courses":[{"id":"c","name":"Matemática","calendarId":"cal","professorIds":["p"],"groups":["Turma A"],"total":8,"done":0,"unit":60,"schedule":{"1":2,"3":2},"completedLessons":[{"day":"2026-10-19","minutes":120}]}]})
+        json!({"version":4,"professors":[{"id":"p","name":"João","absences":[],"extras":[]}],"calendars":[{"id":"cal","name":"Semestre","start":"2026-10-19","end":"2026-11-30","entries":[{"start":"2026-10-21","end":"2026-10-21","type":"holiday","name":"Feriado"}]}],"courses":[{"id":"c","name":"Matemática","calendarId":"cal","professorIds":["p"],"groups":["Turma A"],"total":8,"done":0,"unit":60,"schedule":{"1":2,"3":2},"reviewLessons":["2026-10-26"]}]})
     }
     fn filter(kind: &str, value: &str) -> Filter {
         Filter {
@@ -689,26 +699,62 @@ mod tests {
     fn statuses_and_reasons() {
         let r = collect(&data(), &filter("disciplina", "c")).unwrap();
         let rows = &r.courses[0].rows;
+        // Até a referência (26/10) as aulas contam como realizadas.
         assert!(rows
             .iter()
-            .any(|r| r.day == "2026-10-19" && r.status == "Registrada"));
+            .any(|r| r.day == "2026-10-19" && r.status == "Realizada"));
         assert!(rows
             .iter()
             .any(|r| r.day == "2026-10-21" && r.reason.contains("Feriado")));
         assert!(rows.iter().any(|r| r.day == "2026-10-26"
             && r.status == "Conferir registro"
-            && r.reason.contains("não informado")));
+            && r.reason.contains("conferir")));
         assert!(rows
             .iter()
             .any(|r| r.day == "2026-10-28" && r.status == "Prevista"));
         assert!(!rows.iter().any(|r| r.day.as_str() > "2026-11-02"));
     }
     #[test]
-    fn completed_course_has_no_pending() {
+    fn completed_course_shows_only_marked_extra_lessons() {
         let mut d = data();
         d["courses"][0]["total"] = json!(2);
         let r = collect(&d, &filter("disciplina", "c")).unwrap();
-        assert!(r.courses[0].rows.iter().all(|r| r.status == "Registrada"));
+        let lessons: Vec<_> = r.courses[0]
+            .rows
+            .iter()
+            .filter(|r| r.status != "Sem aula regular")
+            .map(|r| (r.day.as_str(), r.status.as_str()))
+            .collect();
+        assert_eq!(lessons, [("2026-10-19", "Realizada")]);
+        d["courses"][0]["surplusLessons"] = json!(["2026-10-28"]);
+        let r = collect(&d, &filter("disciplina", "c")).unwrap();
+        let row = r.courses[0]
+            .rows
+            .iter()
+            .find(|r| r.day == "2026-10-28")
+            .unwrap();
+        assert_eq!(row.status, "Aula a mais");
+        assert_eq!(row.minutes, 120.0);
+        let pdf = String::from_utf8(generate(&d, &filter("disciplina", "c")).unwrap()).unwrap();
+        assert!(pdf.contains(&literal("2 h · Aula a mais")));
+        assert!(!pdf.contains(&literal("Ministrada")));
+    }
+    #[test]
+    fn legend_fits_on_one_line() {
+        let labels = [
+            "Realizada",
+            "Prevista",
+            "Conferir",
+            "Aula a mais",
+            "Ausência / cancelamento",
+            "Feriado / não letivo",
+            "Conclusão prevista",
+        ];
+        let mut x = MARGIN + crate::pdf::width("LEGENDA", 7.0, true) + 7.0 * 0.6 + 16.0;
+        for label in labels {
+            x += 21.0 + crate::pdf::width(label, 8.0, false) + 18.0;
+        }
+        assert!(x - 18.0 <= PAGE_W - MARGIN, "legenda termina em {x}");
     }
     #[test]
     fn generates_valid_header() {

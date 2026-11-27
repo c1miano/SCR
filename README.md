@@ -1,6 +1,6 @@
 # SCR — Sistema de Controle de Registro
 
-Acompanhamento de carga horária, aulas ministradas, grades semanais por turma e relatórios em PDF.
+Acompanhamento de carga horária, aulas realizadas, grades semanais por turma e relatórios em PDF.
 
 ## Versão web (GitHub Pages)
 

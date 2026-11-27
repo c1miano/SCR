@@ -22,7 +22,11 @@ fn error(e: impl std::fmt::Display) -> String {
 fn empty() -> Value {
     json!({"version":4,"calendars":[],"courses":[],"professors":[]})
 }
+/// Dados prontos para a interface: marcações antigas convertidas
+/// (`engine::migrate`) e previsões calculadas. A conversão é gravada no
+/// próximo salvamento.
 fn envelope(data: Value) -> Result<Value, String> {
+    let data = engine::migrate(&data);
     let (forecasts, issues) = engine::projections_with_issues(&data)?;
     Ok(
         json!({"data":data,"forecasts":forecasts,"issues":issues,"test":cfg!(debug_assertions)&&std::env::var("SCR_TEST_DIR").is_ok()&&std::env::var("SCR_MANUAL").is_err()}),
@@ -104,7 +108,8 @@ fn save_checked(path: &Path, data: &Value, loaded: &mut Option<Value>) -> Result
         .as_ref()
         .ok_or("Os cadastros precisam ser carregados antes de salvar.")?;
     let current: Value = serde_json::from_slice(&fs::read(path).map_err(error)?).map_err(error)?;
-    if &current != expected {
+    // A interface recebe os dados já convertidos; compara na mesma forma.
+    if &engine::migrate(&current) != expected {
         return Err("O arquivo de dados mudou desde a abertura do SCR. Feche e reabra o aplicativo antes de salvar. Nenhum cadastro foi sobrescrito.".into());
     }
     let result = envelope(data.clone())?;
@@ -198,7 +203,7 @@ async fn import_backup() -> Result<Option<Value>, String> {
     let data: Value =
         serde_json::from_slice(&fs::read(file.path()).map_err(error)?).map_err(error)?;
     engine::projections(&data)?;
-    Ok(Some(data))
+    Ok(Some(engine::migrate(&data)))
 }
 #[tauri::command]
 async fn export_csv(text: String) -> Result<bool, String> {
@@ -344,7 +349,16 @@ fn main() {
                 serde_json::from_slice(&fs::read(&file).map_err(error)?).map_err(error)?;
             let results: Result<Vec<_>, _> = cases
                 .iter()
-                .map(|c| engine::forecast(&c["course"], &c["calendar"]))
+                // Data de referência opcional (3º argumento); sem ela, nenhuma aula
+                // conta como realizada. Os resultados da versão Electron
+                // (verification.expected.json) seguem a regra antiga de aulas ministradas.
+                .map(|c| {
+                    let today = std::env::args()
+                        .nth(3)
+                        .and_then(|d| chrono::NaiveDate::parse_from_str(&d, "%Y-%m-%d").ok())
+                        .unwrap_or(chrono::NaiveDate::MIN);
+                    engine::forecast(&c["course"], &c["calendar"], today)
+                })
                 .collect();
             fs::write(
                 format!("{file}.results.json"),
@@ -543,7 +557,7 @@ mod migration_tests {
         .unwrap();
         let before = fs::read(&p).unwrap();
         for _ in 0..3 {
-            assert_eq!(load_path(&p).unwrap()["data"], data);
+            assert_eq!(load_path(&p).unwrap()["data"], engine::migrate(&data));
             snapshot(&p).unwrap();
         }
         assert_eq!(fs::read(&p).unwrap(), before);

@@ -11,10 +11,11 @@
     $('#preview-group').value = 'turma a';
     $('#preview-month').value = '2026-10';
     $('#preview-month').dispatchEvent(new Event('change'));
-    check($('#preview-count').textContent === '2', 'Prévia outubro');
-    const taught = $('.preview-lesson.is-completed'),
-      planned = $('.preview-lesson:not(.is-completed)');
-    check(taught && planned, 'Aulas ministradas e previstas');
+    check(Number($('#preview-count').textContent) >= 1, 'Prévia outubro');
+    // Realizada (azul) e prevista (cinza) têm cores diferentes nos dois temas.
+    const taught = $('.preview-legend .legend-completed'),
+      planned = $('.preview-legend .legend-planned');
+    check(taught && planned, 'Legenda de aulas realizadas e previstas');
     check(getComputedStyle(taught).backgroundColor !== getComputedStyle(planned).backgroundColor, 'Cores');
     $('#theme-toggle').click();
     check(

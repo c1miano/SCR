@@ -47,7 +47,7 @@ function renderGroupPreview() {
   $('#preview-empty').hidden = !group || result.entries.length > 0 || result.events.length > 0;
   $('#preview-empty').textContent = 'Nenhuma aula registrada ou prevista para esta turma neste mês.';
   $('#preview-completed').textContent = result.completed
-    ? `${result.completed} disciplina(s) com carga cumprida: aparecem só as aulas marcadas como ministradas.`
+    ? `${result.completed} disciplina(s) com carga cumprida: aulas além da carga só aparecem marcadas como “Aula a mais”.`
     : '';
   const byDate = new Map();
   for (const item of result.entries) {
@@ -126,7 +126,9 @@ function renderGroupPreview() {
       const card = button(
         '',
         () => openCourse(entry.courseId),
-        'preview-lesson' + (entry.final ? ' is-final' : '') + (entry.completed ? ' is-completed' : ''),
+        'preview-lesson' +
+          (entry.final ? ' is-final' : '') +
+          (entry.review ? ' is-review' : entry.surplus ? ' is-surplus' : entry.past ? ' is-completed' : ''),
       );
       card.dataset.courseId = entry.courseId;
       card.setAttribute(
@@ -137,7 +139,8 @@ function renderGroupPreview() {
           ', ' +
           fmt(entry.minutes / entry.unit) +
           (entry.unit === 60 ? ' horas' : ' horas-aula') +
-          (entry.completed ? ', aula ministrada' : ', aula prevista') +
+          ', ' +
+          lessonStatus(entry).toLowerCase() +
           (entry.final ? ', conclusão prevista' : ''),
       );
       const name = document.createElement('strong');
@@ -150,7 +153,7 @@ function renderGroupPreview() {
       card.append(name, amount);
       const status = document.createElement('small');
       status.className = 'preview-status';
-      status.textContent = entry.completed ? '✓ Ministrada' : 'Prevista';
+      status.textContent = lessonStatus(entry);
       card.append(status);
       if (people.length) {
         const teachers = document.createElement('small');
@@ -175,6 +178,12 @@ function renderGroupPreview() {
     }
     grid.append(cell);
   }
+}
+/** Situação do cartão: marcações primeiro, depois realizada (até hoje) ou prevista. */
+function lessonStatus(entry) {
+  if (entry.review) return 'Conferir';
+  if (entry.surplus) return 'Aula a mais';
+  return entry.past ? 'Realizada' : 'Prevista';
 }
 function movePreviewMonth(delta) {
   const field = $('#preview-month');

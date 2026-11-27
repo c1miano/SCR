@@ -29,7 +29,8 @@
   function collect(data, f) {
     date(f.reference);
     if ([...f.notes].length > 2000) throw 'Use até 2000 caracteres na orientação.';
-    const projections = W.engine.projections(data);
+    // Aulas até a data de referência contam como realizadas.
+    const projections = W.engine.projections(data, f.reference);
     const people = list(get(data, 'professors'));
     let label = null;
     if (f.kind === 'professor') {
@@ -63,13 +64,21 @@
       const unit = n(get(c, 'unit'));
       const rows = [];
       for (const row of list(get(r, 'rows'))) {
-        const completed = row.completed === true;
-        if (!completed && n(row.credited) <= 0) continue;
-        const pending = s(row.day) <= f.reference;
+        const surplus = row.surplus === true;
+        // Aulas além da carga total só entram marcadas como "Aula a mais".
+        if (!surplus && n(row.credited) <= 0) continue;
         rows.push({
           events: [],
           day: s(row.day),
-          status: completed ? 'Registrada' : pending ? 'Conferir registro' : 'Prevista',
+          minutes: n(surplus ? row.minutes : row.credited),
+          status:
+            row.review === true
+              ? 'Conferir registro'
+              : surplus
+                ? 'Aula a mais'
+                : row.past === true
+                  ? 'Realizada'
+                  : 'Prevista',
         });
       }
       if (cal && r !== null) {
@@ -77,14 +86,11 @@
         graded.gradeTurmas = W.engine.gradeFor(data, get(c, 'id'));
         let day = date(s(get(cal, 'start')));
         const end = date(s(get(cal, 'end')));
-        let last;
-        if (r.complete === true) {
-          last = list(r.rows)
-            .filter((x) => x.completed === true)
-            .map((x) => s(x.day))
-            .reduce((a, b) => (b > a ? b : a), '');
-        } else if (typeof r.finish === 'string') last = r.finish;
-        else last = s(get(cal, 'end'));
+        // Impedimentos só até a conclusão (ou a última aula a mais marcada).
+        const last = list(r.rows)
+          .filter((x) => x.surplus === true)
+          .map((x) => s(x.day))
+          .reduce((a, b) => (b > a ? b : a), typeof r.finish === 'string' ? r.finish : s(get(cal, 'end')));
         for (; day <= end; day++) {
           const key = dayString(day);
           const regular = n(get(W.engine.schedule(graded, day), String(fromSunday(day)))) * unit;
@@ -108,7 +114,7 @@
           if (events.length) {
             const row = rows.find((x) => x.day === key);
             if (row) row.events = events.slice();
-            else rows.push({ events, day: key, status: 'Sem aula regular' });
+            else rows.push({ events, day: key, minutes: 0, status: 'Sem aula regular' });
           }
         }
       }
@@ -166,6 +172,7 @@
   const REVIEW = { fill: '#f3e8ff', stroke: '#d8b4fe', accent: '#7c3aed' };
   const ABSENCE = { fill: '#ffedd5', stroke: '#fdba74', accent: '#c2410c' };
   const HOLIDAY = { fill: '#fef9c3', stroke: '#fde047', accent: '#ca8a04' };
+  const SURPLUS = { fill: '#d5f5ef', stroke: '#5eead4', accent: '#0f766e' };
   const FINISH = { fill: '#dcfce7', stroke: '#86efac', accent: '#15803d' };
   const CARD_LINE = 9;
 
@@ -212,13 +219,11 @@
     if (nextFirst === null) throw 'Mês inválido';
     const days = nextFirst - first;
     const offset = fromMonday(first);
-    const projections = W.engine.projections(data);
     const reference = parseDay(report.reference);
+    const projections = W.engine.projections(data, report.reference);
     const title = `${MONTHS[fy.month - 1]} ${fy.year}`;
     const used = (weekday) =>
-      report.courses
-        .filter((c) => !c.complete)
-        .some((c) =>
+      report.courses.some((c) =>
           c.rows.some((r) => {
             if (!(r.day.startsWith(month) && (r.status !== 'Sem aula regular' || r.events.length))) return false;
             const d = parseDay(r.day);
@@ -240,22 +245,25 @@
         if (day !== null) {
           const key = dayString(day);
           for (const course of report.courses) {
-            if (course.complete) continue;
             const proj = projections[course.id] ?? null;
             for (const row of course.rows.filter((r) => r.day === key)) {
               if (row.status !== 'Sem aula regular') {
-                const original = list(get(proj, 'rows')).find((r) => s(r.day) === key);
-                const minutes = original ? (original.completed === true ? n(original.minutes) : n(original.credited)) : 0;
                 const lines = wrap(course.name, 7.5, true, cardText);
                 lines.push(
-                  `${amount(minutes / course.unit)} ${course.unit === 60 ? 'h' : 'h-aula'} · ${
-                    row.status === 'Registrada' ? 'Ministrada' : row.status === 'Conferir registro' ? 'Conferir' : 'Prevista'
+                  `${amount(row.minutes / course.unit)} ${course.unit === 60 ? 'h' : 'h-aula'} · ${
+                    row.status === 'Conferir registro' ? 'Conferir' : row.status
                   }`,
                 );
                 lines.push(...wrap(course.people, 7.5, false, cardText));
                 if (s(get(proj, 'finish')) === key) lines.push('Conclusão prevista');
                 const tone =
-                  row.status === 'Registrada' ? TAUGHT : row.status === 'Conferir registro' ? REVIEW : PLANNED;
+                  row.status === 'Realizada'
+                    ? TAUGHT
+                    : row.status === 'Conferir registro'
+                      ? REVIEW
+                      : row.status === 'Aula a mais'
+                        ? SURPLUS
+                        : PLANNED;
                 pushCard(cards, lines, tone);
               }
               for (const event of row.events) {
@@ -346,11 +354,12 @@
     const report = collect(data, f);
     const pdf = new Pdf('Calendário de aulas', 'SCR · Relatório de acompanhamento');
     pdf.legend = [
-      ['Ministrada', TAUGHT],
+      ['Realizada', TAUGHT],
       ['Prevista', PLANNED],
-      ['Conferir registro', REVIEW],
+      ['Conferir', REVIEW],
+      ['Aula a mais', SURPLUS],
       ['Ausência / cancelamento', ABSENCE],
-      ['Feriado / dia não letivo', HOLIDAY],
+      ['Feriado / não letivo', HOLIDAY],
       ['Conclusão prevista', FINISH],
     ];
     for (const month of months) calendarPdf(data, report, month, pdf);

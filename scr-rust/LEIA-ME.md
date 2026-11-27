@@ -103,7 +103,7 @@ Cartões de ausência/cancelamento e feriado/dia não letivo exibem **Não regis
 
 Menu **Turmas e grades**: cada turma tem uma grade semanal (aulas por dia × segunda a sábado), em que cada célula é uma aula de uma disciplina, na unidade da disciplina. A grade define os dias e a carga de cada disciplina nas previsões, na prévia e nos relatórios PDF.
 
-- **Vigências:** a grade pode mudar a qualquer momento. *Salvar como nova vigência* cria uma grade válida a partir da data escolhida; as semanas anteriores continuam com a grade antiga. *Corrigir esta vigência* edita a grade exibida quando ela foi cadastrada errada. Aulas marcadas como ministradas nunca mudam.
+- **Vigências:** a grade pode mudar a qualquer momento. *Salvar como nova vigência* cria uma grade válida a partir da data escolhida; as semanas anteriores continuam com a grade antiga. *Corrigir esta vigência* edita a grade exibida quando ela foi cadastrada errada.
 - **Prioridade no cálculo:** alteração pontual de uma semana na disciplina > grade da turma vigente na data > rotina semanal do próprio cadastro (fixa ou A/B). Antes da primeira vigência, e para disciplinas fora de qualquer grade, vale a rotina da disciplina. Se a disciplina está em mais de uma turma, as aulas das grades são somadas.
 - Ao salvar uma grade, as disciplinas dela recebem a tag da turma (usada na prévia e nos relatórios).
 - Os dados ficam em `turmas` no `dados.json`; versões anteriores do SCR ignoram esse campo.
@@ -111,13 +111,13 @@ Menu **Turmas e grades**: cada turma tem uma grade semanal (aulas por dia × seg
 
 ## Visual dos PDFs
 
-O calendário de registros e a grade da turma usam as cores e a tipografia da interface (`src-tauri/src/pdf.rs` repete os tokens de `ui/app.css`): marca SCR em teal, cartões de aula com faixa lateral colorida (azul ministrada, cinza prevista, roxo conferir, laranja ausência, amarelo feriado), sábado e domingo só aparecem quando há aula nesses dias (pela grade, rotina ou aula extra), data de referência destacada e legenda em uma linha.
+O calendário de registros e a grade da turma usam as cores e a tipografia da interface (`src-tauri/src/pdf.rs` repete os tokens de `ui/app.css`): marca SCR em teal, cartões de aula com faixa lateral colorida (azul realizada, cinza prevista, roxo conferir, verde-azulado aula a mais, laranja ausência, amarelo feriado), sábado e domingo só aparecem quando há aula nesses dias (pela grade, rotina ou aula extra), data de referência destacada e legenda em uma linha.
 
 ## Prévia por turma: carga diária e ocorrências
 
 - **Mínimo de 4 horas por dia.** Dias letivos (segunda a sexta, dentro do período do calendário e fora de feriados e dias não letivos) com menos de 4 horas de relógio (240 minutos) de aula ficam com contorno vermelho. Cada dia mostra o total, e o resumo conta os dias abaixo do mínimo. O valor está em `MIN_DAILY_MINUTES` (`ui/group-preview-model.js`).
 - **Ocorrências na grade.** Feriados e dias não letivos (amarelo), ausências de professores e cancelamentos da disciplina (laranja) e aulas extras (verde) aparecem nos dias correspondentes. A aula extra que já aparece no cartão da disciplina (marcada “Extra”) não se repete.
-- **Disciplinas concluídas.** Não saem mais da prévia: aparecem apenas as aulas marcadas como ministradas, inclusive as dadas depois de 100%, e essas aulas contam no total do dia.
+- **Disciplinas concluídas.** Não saem mais da prévia: as aulas até a conclusão continuam aparecendo, e as aulas além da carga total aparecem quando marcadas como “Aula a mais” (ver abaixo), contando no total do dia.
 - `node scripts/test-preview.cjs` testa essas regras com o núcleo JS. O calendário em PDF ainda não foi alterado.
 
 ## Interface: celular e acessibilidade
@@ -130,3 +130,14 @@ Revisão guiada pelo checklist da skill UI/UX Pro Max (estilo Minimalismo/Swiss 
 - **Contraste:** o texto secundário do tema claro passou a `#5a6d6a` (≥ 4,5:1 em todas as superfícies).
 - **Tamanho mínimo de texto:** 12px.
 - **Teclado:** link “Pular para o conteúdo” no primeiro Tab.
+
+## Carga pela data, “Conferir” e “Aula a mais”
+
+A marcação “Ministrada” foi removida. Agora:
+
+- **Carga cumprida automática.** Toda aula prevista até hoje conta como realizada. Feriados, dias não letivos, ausências e cancelamentos continuam retirando as aulas do dia, e as reposições continuam somando. No relatório PDF, “até hoje” é a data de referência escolhida no formulário.
+- **Conferir** (`reviewLessons` na disciplina): marque quando o professor precisa revisar o registro daquela aula. É só um aviso: não muda a carga. Aparece em lilás na prévia e no PDF.
+- **Aula a mais** (`surplusLessons`): aulas da rotina ou da grade depois de a disciplina atingir a carga total ficam ocultas. Marcadas, aparecem na prévia e no PDF (verde-azulado) e somam no total do dia. A opção só aparece nas aulas além da carga.
+- As duas marcações ficam na tabela “O caminho até a conclusão” do cadastro da disciplina e são salvas na hora. O CSV traz as colunas Situação, Conferir e Aula a mais.
+- **Conversão automática dos dados antigos** (`completedLessons`): ao abrir o SCR ou importar um backup, as aulas que estavam marcadas como ministradas depois de atingida a carga total viram “Aula a mais”; as demais perdem a marca, pois passam a contar pela data. Uma marcação numa data sem aula prevista vira aula extra da disciplina, para não perder carga. A conversão é gravada no próximo salvamento. O mesmo código existe em `engine.rs` (`migrate`) e `ui/web/engine.js`.
+- `cargo test` cobre a regra pela data, as duas marcações, a conversão e o PDF; o modo `--verify <arquivo> [AAAA-MM-DD]` aceita a data de referência. Os PDFs gerados em Rust e em JS continuam idênticos byte a byte.

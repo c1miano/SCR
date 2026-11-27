@@ -261,7 +261,7 @@
             <div class="page-heading">
               <span class="eyebrow">Planejamento mensal</span>
               <h1>Prévia por turma</h1>
-              <p>Veja as aulas previstas e ministradas da turma, com feriados, dias não letivos, ausências e aulas extras.</p>
+              <p>Veja as aulas da turma, com feriados, dias não letivos, ausências, reposições e as marcações “Conferir” e “Aula a mais”.</p>
             </div>
             <div id="preview-no-groups" class="notice">
               Para usar esta prévia, preencha as tags de turma no cadastro das disciplinas.
@@ -298,11 +298,12 @@
               <div class="preview-head">
                 <h2 id="preview-title"></h2>
                 <div class="preview-legend" aria-label="Legenda das aulas">
-                  <span><i class="legend-planned"></i>Prevista</span><span><i class="legend-completed"></i>Ministrada</span
+                  <span><i class="legend-completed"></i>Realizada</span><span><i class="legend-planned"></i>Prevista</span
+                  ><span><i class="legend-review"></i>Conferir</span><span><i class="legend-surplus"></i>Aula a mais</span
                   ><span><i class="legend-final"></i>Conclusão</span
                   ><span><i class="legend-holiday"></i>Feriado / não letivo</span
                   ><span><i class="legend-absence"></i>Ausência / cancelamento</span
-                  ><span><i class="legend-extra"></i>Aula extra</span
+                  ><span><i class="legend-extra"></i>Reposição</span
                   ><span><i class="legend-short"></i>Dia com menos de 4h</span>
                 </div>
               </div>
@@ -310,13 +311,13 @@
                 <div class="month-weekdays" aria-hidden="true">
                   <span>Seg</span><span>Ter</span><span>Qua</span><span>Qui</span><span>Sex</span><span>Sáb</span><span>Dom</span>
                 </div>
-                <div id="preview-grid" class="month-grid" aria-label="Aulas previstas e ministradas no mês"></div>
+                <div id="preview-grid" class="month-grid" aria-label="Aulas do mês"></div>
               </div>
               <p class="help">
-                Clique em uma aula para abrir a disciplina. Aulas já ministradas aparecem em azul e com a identificação “Ministrada”. O último
-                encontro mostra apenas a carga necessária para concluir; depois dele, não há novas aulas previstas. Disciplinas com a carga
-                cumprida continuam aparecendo apenas nas aulas marcadas como ministradas, que seguem contando no total do dia. Dias letivos
-                (segunda a sexta, fora de feriados e dias não letivos) com menos de 4 horas de aula ficam com contorno vermelho.
+                Clique em uma aula para abrir a disciplina. Aulas até hoje aparecem como realizadas (azul) e as seguintes como previstas
+                (cinza). “Conferir” (lilás) indica que o professor precisa revisar o registro. O último encontro mostra apenas a carga necessária
+                para concluir; aulas além da carga total só aparecem quando marcadas como “Aula a mais” (verde-azulado) no cadastro da disciplina.
+                Dias letivos (segunda a sexta, fora de feriados e dias não letivos) com menos de 4 horas de aula ficam com contorno vermelho.
               </p>
             </div>
           </section>
@@ -375,8 +376,7 @@
               </div>
               <p class="help">
                 <strong>Salvar como nova vigência</strong> quando o horário mudou de fato: a grade nova vale a partir da data e as semanas
-                anteriores ficam como estavam. <strong>Corrigir esta vigência</strong> quando a grade exibida foi cadastrada errada. Aulas já
-                marcadas como ministradas nunca mudam. Para trocar só uma semana, use “Alterar uma semana específica” na disciplina. Ao salvar,
+                anteriores ficam como estavam. <strong>Corrigir esta vigência</strong> quando a grade exibida foi cadastrada errada. Para trocar só uma semana, use “Alterar uma semana específica” na disciplina. Ao salvar,
                 as disciplinas da grade recebem a tag desta turma.
               </p>
               <p id="turma-message" role="status" aria-live="polite"></p>
@@ -489,8 +489,7 @@
               </form>
               <div class="notice professor-rule">
                 As ausências retiram as aulas regulares de todas as disciplinas vinculadas nas datas informadas, inclusive quando há outros
-                professores na disciplina. Aulas já marcadas como ministradas são preservadas. Reposições e aulas extras explícitas continuam
-                sendo contadas.
+                professores na disciplina. Reposições e aulas extras explícitas continuam sendo contadas.
               </div>
               <hr />
               <h3>Ausências</h3>
@@ -545,8 +544,7 @@
                 </div>
                 <p class="help">
                   A carga entra na previsão somente com vínculo ativo e dentro do período da disciplina. Não registre a mesma aula novamente nos
-                  ajustes da disciplina. Se ela já foi marcada como ministrada, sua duração registrada não é alterada; desmarque e marque
-                  novamente para corrigir a carga.
+                  ajustes da disciplina.
                 </p>
                 <div class="actions">
                   <button id="extra-cancel" class="secondary" type="button" hidden>Cancelar edição</button>
@@ -634,7 +632,7 @@
                   </label>
                 </div>
                 <p class="help">
-                  Informe neste campo somente a carga cumprida antes do início do calendário. As aulas marcadas como ministradas abaixo são somadas
+                  Informe neste campo somente a carga cumprida antes do início do calendário. As aulas do calendário até hoje são somadas
                   automaticamente; não as inclua novamente neste campo.
                 </p>
               </div>
@@ -684,8 +682,7 @@
                     </table>
                   </div>
                   <p class="help">
-                    As alterações são confirmadas junto com Salvar e recalcular. Feriados e ausências continuam valendo; aulas ministradas mantêm
-                    a carga registrada.
+                    As alterações são confirmadas junto com Salvar e recalcular. Feriados e ausências continuam valendo.
                   </p>
                 </details>
               </div>
@@ -717,7 +714,7 @@
               <div class="panel-title panel-between">
                 <div>
                   <h3>O caminho até a conclusão</h3>
-                  <p>Marque as aulas ministradas para atualizar o progresso. Desmarque para desfazer.</p>
+                  <p>As aulas até hoje contam automaticamente. Marque “Conferir” quando o professor precisar revisar o registro e “Aula a mais” para mostrar na prévia e no relatório uma aula além da carga total.</p>
                 </div>
                 <div class="button-group">
                   <button id="export" class="secondary" type="button"><svg class="icon" aria-hidden="true"><use href="#i-download" /></svg>Exportar CSV</button>
@@ -732,15 +729,15 @@
                       <th>Encontro</th>
                       <th>Carga prevista</th>
                       <th>Acumulado*</th>
-                      <th>Ministrada</th>
+                      <th>Marcações</th>
                     </tr>
                   </thead>
                   <tbody id="rows"></tbody>
                 </table>
               </div>
               <p class="help">
-                *Acumulado previsto, limitado à carga total. A marcação registra a carga do encontro inteiro e é salva imediatamente. A duração de
-                uma aula ministrada é preservada mesmo se o calendário mudar. Reposições são contadas mesmo em dias não letivos.
+                *Acumulado previsto, limitado à carga total. As marcações são salvas imediatamente e não mudam a carga cumprida. Reposições são
+                contadas mesmo em dias não letivos.
               </p>
             </div>
           </section>

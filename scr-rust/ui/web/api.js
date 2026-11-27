@@ -39,7 +39,9 @@
   const clone = (v) => (v === undefined ? null : JSON.parse(JSON.stringify(v)));
   const empty = () => ({ version: 4, calendars: [], courses: [], professors: [] });
   const engine = () => window.SCRWeb.engine;
+  // Mesmo envelope do main.rs: marcações antigas convertidas e previsões.
   function envelope(data) {
+    data = engine().migrate(data);
     const { forecasts, issues } = engine().projectionsWithIssues(data);
     return { data, forecasts, issues, test: false };
   }
@@ -197,7 +199,7 @@
         throw 'arquivo JSON inválido';
       }
       engine().projections(data);
-      return data;
+      return engine().migrate(data);
     },
     async export_csv({ text }) {
       return download('calendario-disciplina.csv', text, 'text/csv;charset=utf-8');

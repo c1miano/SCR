@@ -1,6 +1,6 @@
 use chrono::{Datelike, Duration, NaiveDate};
 use serde_json::{json, Value as V};
-use std::collections::{BTreeMap, HashSet};
+use std::collections::HashSet;
 fn array(v: &V) -> Vec<&V> {
     v.as_array().map(|x| x.iter().collect()).unwrap_or_default()
 }
@@ -107,7 +107,15 @@ fn settle(x: f64) -> f64 {
         x
     }
 }
-pub fn forecast(c: &V, cal: &V) -> Result<V, String> {
+/// Previsão de uma disciplina na data de referência `today`.
+///
+/// Toda aula prevista até `today` conta como dada (feriados, dias não letivos,
+/// ausências e cancelamentos zeram a rotina do dia; aulas extras somam). Não há
+/// confirmação aula a aula; duas marcações opcionais acompanham cada data:
+/// - `reviewLessons`: o professor precisa conferir o registro (não muda a carga);
+/// - `surplusLessons`: aula além da carga total que deve aparecer na prévia e
+///   nos relatórios (sem a marcação, as aulas além dos 100% ficam ocultas).
+pub fn forecast(c: &V, cal: &V, today: NaiveDate) -> Result<V, String> {
     let start = date(text(&c["start"]))?;
     let end = date(text(&c["end"]))?;
     if end < start || (end - start).num_days() > 1096 {
@@ -120,20 +128,14 @@ pub fn forecast(c: &V, cal: &V) -> Result<V, String> {
         return Err("Carga horária inválida.".into());
     }
     let blocked: HashSet<&str> = array(&c["excluded"]).into_iter().map(text).collect();
-    let mut completed = BTreeMap::new();
-    for x in array(&c["completedLessons"]) {
-        date(text(&x["day"]))?;
-        let m = num(&x["minutes"]);
-        if m <= 0.0 {
-            return Err("Aula ministrada inválida.".into());
-        }
-        completed.insert(text(&x["day"]).to_string(), m);
-    }
-    let taught: f64 = completed.values().fold(0.0, |sum, m| sum + m);
-    let done = target.min(baseline + taught);
-    let remaining = settle((target - done).max(0.0));
-    let mut rows = BTreeMap::new();
+    let review: HashSet<&str> = array(&c["reviewLessons"]).into_iter().map(text).collect();
+    let surplus: HashSet<&str> = array(&c["surplusLessons"]).into_iter().map(text).collect();
+    let today = today.to_string();
+    let need = settle((target - baseline).max(0.0));
+    let mut rows = Vec::new();
     let mut d = start;
+    let (mut sum, mut done_extra, mut available, mut surplus_taught) = (0.0, 0.0, 0.0, 0.0);
+    let mut finish: Option<String> = None;
     loop {
         let day = d.to_string();
         let regular = num(&schedule(c, d)?[d.weekday().num_days_from_sunday().to_string()]) * unit;
@@ -146,64 +148,150 @@ pub fn forecast(c: &V, cal: &V) -> Result<V, String> {
             .filter(|x| text(&x["date"]) == day)
             .map(|x| num(&x["hours"]) * unit)
             .sum();
-        let minutes = completed
-            .get(&day)
-            .copied()
-            .unwrap_or(if excluded { 0.0 } else { regular } + extra);
+        let minutes = if excluded { 0.0 } else { regular } + extra;
         if minutes > 0.0 {
-            rows.insert(day.clone(),json!({"day":day,"minutes":minutes,"completed":completed.contains_key(&day),"extra":extra>0.0}));
+            let past = day <= today;
+            let credited = minutes.min((need - sum).max(0.0));
+            sum += credited;
+            if need > 0.0 && sum >= need - EPS && finish.is_none() {
+                finish = Some(day.clone());
+            }
+            let beyond = settle(minutes - credited);
+            let marked = surplus.contains(day.as_str()) && beyond > 0.0;
+            if past {
+                done_extra += credited;
+                if marked {
+                    surplus_taught += beyond;
+                }
+            } else {
+                available += minutes;
+            }
+            rows.push(
+                json!({"day":day,"minutes":minutes,"extra":extra>0.0,"past":past,
+                "review":review.contains(day.as_str()),"surplus":marked,
+                "credited":credited,"beyond":beyond,"accumulated":target.min(baseline+sum)}),
+            );
         }
         if d == end {
             break;
         }
         d += Duration::days(1);
     }
-    for (day, minutes) in &completed {
-        rows.entry(day.clone())
-            .or_insert(json!({"day":day,"minutes":minutes,"completed":true,"extra":false}));
+    let done = target.min(baseline + done_extra);
+    let remaining = settle((target - done).max(0.0));
+    Ok(json!({"remaining":remaining,"available":available,
+        "deficit":settle((remaining-available).max(0.0)),"finish":finish,
+        "complete":remaining==0.0,"done":done,"surplusTaught":surplus_taught,"rows":rows}))
+}
+/// Disciplina pronta para o cálculo: grade das turmas, período do calendário,
+/// ausências dos professores e aulas extras cadastradas no professor.
+/// `None` quando o calendário não existe ou não tem período.
+fn prepare(data: &V, course: &V) -> Option<(V, V)> {
+    let cal = array(&data["calendars"])
+        .into_iter()
+        .find(|x| x["id"] == course["calendarId"])?;
+    if text(&cal["start"]).is_empty() || text(&cal["end"]).is_empty() {
+        return None;
     }
-    let mut sum = 0.0;
-    let mut available = 0.0;
-    let mut accumulated = baseline;
-    let mut finish: Option<String> = None;
-    for row in rows.values_mut() {
-        let m = num(&row["minutes"]);
-        let credited = if row["completed"] == true {
-            m
-        } else {
-            available += m;
-            let cr = m.min((remaining - sum).max(0.0));
-            sum += cr;
-            if remaining > 0.0 && sum >= remaining - EPS && finish.is_none() {
-                finish = Some(text(&row["day"]).to_string());
-            }
-            cr
-        };
-        accumulated = target.min(accumulated + credited);
-        row["credited"] = json!(credited);
-        row["accumulated"] = json!(accumulated);
-    }
-    if let Some(ref mut f) = finish {
-        if let Some(last) = completed.keys().last() {
-            if last > &*f {
-                *f = last.clone();
+    let mut c = course.clone();
+    c["gradeTurmas"] = grade_for(data, &course["id"]);
+    c["start"] = cal["start"].clone();
+    c["end"] = cal["end"].clone();
+    let mut blocked: Vec<V> = array(&cal["entries"]).into_iter().cloned().collect();
+    let mut extras: Vec<V> = array(&c["extras"]).into_iter().cloned().collect();
+    for person in array(&data["professors"]) {
+        if !array(&course["professorIds"])
+            .iter()
+            .any(|id| **id == person["id"])
+        {
+            continue;
+        }
+        blocked.extend(array(&person["absences"]).into_iter().cloned());
+        for x in array(&person["extras"]) {
+            if x["courseId"] == course["id"] {
+                extras.push(json!({"date":x["date"],"hours":num(&x["hours"])*num(&x["unit"])/num(&c["unit"])}));
             }
         }
     }
-    Ok(
-        json!({"remaining":remaining,"available":available,"deficit":settle((remaining-available).max(0.0)),"finish":finish,"complete":remaining==0.0,"done":done,"taught":taught,"rows":rows.into_values().collect::<Vec<_>>()}),
-    )
+    c["extras"] = json!(extras);
+    Some((c, json!(blocked)))
 }
-/// Calcula as previsões de todas as disciplinas.
+/// Converte as marcações "Ministrada" das versões anteriores
+/// (`completedLessons`): as aulas marcadas depois de atingida a carga total
+/// viram "Aula a mais" (`surplusLessons`); as demais deixam de ser marcadas,
+/// pois a carga passou a contar pela data. Uma aula marcada numa data sem aula
+/// prevista vira aula extra da disciplina, para não perder carga.
+/// Sem `completedLessons`, devolve os dados sem alteração.
+pub fn migrate(data: &V) -> V {
+    let mut out = data.clone();
+    let Some(courses) = out["courses"].as_array_mut() else {
+        return out;
+    };
+    for i in 0..courses.len() {
+        let course = courses[i].clone();
+        if course.get("completedLessons").is_none() {
+            continue;
+        }
+        let mut lessons: Vec<(String, f64)> = array(&course["completedLessons"])
+            .iter()
+            .map(|x| (text(&x["day"]).to_string(), num(&x["minutes"])))
+            .filter(|(_, m)| *m > 0.0)
+            .collect();
+        lessons.sort_by(|a, b| a.0.cmp(&b.0));
+        let unit = num(&course["unit"]);
+        let target = num(&course["total"]) * unit;
+        // Datas com aula prevista (o cálculo novo, sem as marcações antigas).
+        let planned: HashSet<String> = prepare(data, &course)
+            .and_then(|(c, blocked)| {
+                forecast(&c, &blocked, NaiveDate::from_ymd_opt(9999, 12, 31)?).ok()
+            })
+            .map(|r| {
+                array(&r["rows"])
+                    .iter()
+                    .map(|x| text(&x["day"]).to_string())
+                    .collect()
+            })
+            .unwrap_or_default();
+        let mut surplus: Vec<V> = array(&course["surplusLessons"])
+            .into_iter()
+            .cloned()
+            .collect();
+        let mut extras: Vec<V> = array(&course["extras"]).into_iter().cloned().collect();
+        let mut accumulated = num(&course["done"]) * unit;
+        for (day, minutes) in lessons {
+            if accumulated >= target - EPS && !surplus.iter().any(|x| text(x) == day) {
+                surplus.push(json!(day));
+            }
+            if !planned.contains(&day) && unit > 0.0 {
+                extras.push(json!({"date":day,"hours":minutes/unit}));
+            }
+            accumulated += minutes;
+        }
+        let c = courses[i].as_object_mut().expect("disciplina");
+        c.remove("completedLessons");
+        if !surplus.is_empty() {
+            c.insert("surplusLessons".into(), json!(surplus));
+        }
+        c.insert("extras".into(), json!(extras));
+    }
+    out
+}
+/// Calcula as previsões de todas as disciplinas na data de hoje.
 ///
 /// Erros estruturais (versão, listas ausentes, identificadores repetidos)
 /// invalidam o arquivo inteiro. Um erro de cálculo em uma disciplina
 /// (carga ou datas inválidas) não impede o carregamento das demais: a
 /// previsão dela fica `null` e a mensagem vai para `issues`.
 pub fn projections(data: &V) -> Result<V, String> {
-    projections_with_issues(data).map(|(forecasts, _)| forecasts)
+    projections_at(data, chrono::Local::now().date_naive())
+}
+pub fn projections_at(data: &V, today: NaiveDate) -> Result<V, String> {
+    projections_with_issues_at(data, today).map(|(forecasts, _)| forecasts)
 }
 pub fn projections_with_issues(data: &V) -> Result<(V, V), String> {
+    projections_with_issues_at(data, chrono::Local::now().date_naive())
+}
+pub fn projections_with_issues_at(data: &V, today: NaiveDate) -> Result<(V, V), String> {
     if data["version"] != 4
         || !data["courses"].is_array()
         || !data["calendars"].is_array()
@@ -211,6 +299,7 @@ pub fn projections_with_issues(data: &V) -> Result<(V, V), String> {
     {
         return Err("Arquivo SCR inválido (esperado formato versão 4).".into());
     }
+    let data = &migrate(data);
     let mut result = serde_json::Map::new();
     let mut issues = serde_json::Map::new();
     let mut ids = HashSet::new();
@@ -219,39 +308,11 @@ pub fn projections_with_issues(data: &V) -> Result<(V, V), String> {
         if id.is_empty() || !ids.insert(id) {
             return Err("Identificador de disciplina inválido ou repetido.".into());
         }
-        let cal = array(&data["calendars"])
-            .into_iter()
-            .find(|x| x["id"] == course["calendarId"]);
-        let Some(cal) = cal else {
+        let Some((c, blocked)) = prepare(data, course) else {
             result.insert(id.into(), V::Null);
             continue;
         };
-        if text(&cal["start"]).is_empty() || text(&cal["end"]).is_empty() {
-            result.insert(id.into(), V::Null);
-            continue;
-        }
-        let mut c = course.clone();
-        c["gradeTurmas"] = grade_for(data, &course["id"]);
-        c["start"] = cal["start"].clone();
-        c["end"] = cal["end"].clone();
-        let mut blocked: Vec<V> = array(&cal["entries"]).into_iter().cloned().collect();
-        let mut extras: Vec<V> = array(&c["extras"]).into_iter().cloned().collect();
-        for person in array(&data["professors"]) {
-            if !array(&course["professorIds"])
-                .iter()
-                .any(|id| **id == person["id"])
-            {
-                continue;
-            }
-            blocked.extend(array(&person["absences"]).into_iter().cloned());
-            for x in array(&person["extras"]) {
-                if x["courseId"] == course["id"] {
-                    extras.push(json!({"date":x["date"],"hours":num(&x["hours"])*num(&x["unit"])/num(&c["unit"])}));
-                }
-            }
-        }
-        c["extras"] = json!(extras);
-        match forecast(&c, &json!(blocked)) {
+        match forecast(&c, &blocked, today) {
             Ok(r) => {
                 result.insert(id.into(), r);
             }
@@ -266,27 +327,84 @@ pub fn projections_with_issues(data: &V) -> Result<(V, V), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    fn d(s: &str) -> NaiveDate {
+        date(s).unwrap()
+    }
     #[test]
-    fn target_and_completed() {
-        let mut c = json!({"total":5,"done":0,"unit":50,"start":"2026-10-19","end":"2026-11-30","schedule":{"1":2,"3":2},"completedLessons":[]});
-        let r = forecast(&c, &json!([])).unwrap();
+    fn target_and_progress_by_date() {
+        let c = json!({"total":5,"done":0,"unit":50,"start":"2026-10-19","end":"2026-11-30","schedule":{"1":2,"3":2}});
+        let r = forecast(&c, &json!([]), d("2026-10-01")).unwrap();
         assert_eq!(r["finish"], "2026-10-26");
         assert_eq!(r["rows"][2]["credited"], 50.0);
-        c["completedLessons"] = json!([{"day":"2026-10-19","minutes":250}]);
-        assert_eq!(forecast(&c, &json!([])).unwrap()["complete"], true);
+        assert_eq!(r["done"], 0.0);
+        // Até 21/10 foram dadas 4 aulas (19 e 21): 200 de 250 minutos.
+        let r = forecast(&c, &json!([]), d("2026-10-21")).unwrap();
+        assert_eq!(r["done"], 200.0);
+        assert_eq!(r["rows"][1]["past"], true);
+        assert_eq!(r["rows"][2]["past"], false);
+        assert_eq!(
+            forecast(&c, &json!([]), d("2026-10-26")).unwrap()["complete"],
+            true
+        );
+    }
+    #[test]
+    fn review_mark_does_not_change_the_load() {
+        let mut c = json!({"total":5,"done":0,"unit":50,"start":"2026-10-19","end":"2026-11-30","schedule":{"1":2,"3":2}});
+        let before = forecast(&c, &json!([]), d("2026-10-21")).unwrap();
+        c["reviewLessons"] = json!(["2026-10-19"]);
+        let after = forecast(&c, &json!([]), d("2026-10-21")).unwrap();
+        assert_eq!(after["rows"][0]["review"], true);
+        assert_eq!(after["rows"][1]["review"], false);
+        assert_eq!(before["done"], after["done"]);
+    }
+    #[test]
+    fn surplus_lessons_beyond_the_target() {
+        let mut c = json!({"total":4,"done":0,"unit":50,"start":"2026-10-19","end":"2026-10-30","schedule":{"1":2,"3":2}});
+        let r = forecast(&c, &json!([]), d("2026-10-30")).unwrap();
+        // 19 e 21 completam a carga; 26 e 28 ficam além dos 100%.
+        assert_eq!(r["complete"], true);
+        assert_eq!(r["rows"][2]["credited"], 0.0);
+        assert_eq!(r["rows"][2]["beyond"], 100.0);
+        assert_eq!(r["rows"][2]["surplus"], false);
+        c["surplusLessons"] = json!(["2026-10-26", "2026-10-19"]);
+        let r = forecast(&c, &json!([]), d("2026-10-30")).unwrap();
+        assert_eq!(r["rows"][2]["surplus"], true);
+        // Marcação numa aula dentro da carga não tem efeito.
+        assert_eq!(r["rows"][0]["surplus"], false);
+        assert_eq!(r["surplusTaught"], 100.0);
+        assert_eq!(r["done"], 200.0);
+    }
+    #[test]
+    fn migrates_taught_marks() {
+        let data = json!({"version":4,"professors":[],
+        "calendars":[{"id":"cal","start":"2026-10-19","end":"2026-10-30","entries":[]}],
+        "courses":[{"id":"c","calendarId":"cal","total":4,"done":0,"unit":50,"schedule":{"1":2,"3":2},"extras":[],
+            "completedLessons":[{"day":"2026-10-19","minutes":100},{"day":"2026-10-21","minutes":100},
+                {"day":"2026-10-26","minutes":100},{"day":"2026-10-24","minutes":50}]}]});
+        let m = migrate(&data);
+        let c = &m["courses"][0];
+        assert!(c.get("completedLessons").is_none());
+        // 19 e 21 completam a carga: 24 e 26 ficam como "Aula a mais". 24/10
+        // (sábado, sem aula prevista) também vira aula extra, para não perder carga.
+        assert_eq!(c["surplusLessons"], json!(["2026-10-24", "2026-10-26"]));
+        assert_eq!(c["extras"], json!([{"date":"2026-10-24","hours":1.0}]));
+        assert_eq!(migrate(&m), m);
+        let plain = json!({"version":4,"professors":[],"calendars":[],"courses":[{"id":"x"}]});
+        assert_eq!(migrate(&plain), plain);
     }
     #[test]
     fn invalid_period() {
         assert!(forecast(
             &json!({"start":"2026-02-30","end":"2026-10-20"}),
-            &json!([])
+            &json!([]),
+            d("2026-10-01")
         )
         .is_err());
     }
     #[test]
     fn alternating() {
         let c = json!({"total":8,"done":0,"unit":50,"start":"2026-10-19","end":"2026-11-30","schedule":{"2":2},"scheduleMode":"alternating","weekAnchor":"2026-10-19","scheduleB":{"3":2},"weekOverrides":[{"weekStart":"2026-10-26","schedule":{"2":2}}]});
-        let r = forecast(&c, &json!([])).unwrap();
+        let r = forecast(&c, &json!([]), d("2026-10-01")).unwrap();
         assert_eq!(r["rows"][1]["day"], "2026-10-27");
         assert_eq!(r["finish"], "2026-11-11");
     }
@@ -313,12 +431,12 @@ mod tests {
     #[test]
     fn fractional_hours_complete_without_float_residue() {
         // 30 aulas de 50/30 min somam 49,999999999999986 em vez de 50.
-        let lessons: Vec<V> = (1..=30)
-            .map(|d| json!({"day":format!("2026-10-{:02}",d),"minutes":50.0/30.0}))
+        let extras: Vec<V> = (1..=30)
+            .map(|d| json!({"date":format!("2026-10-{:02}",d),"hours":1.0/30.0}))
             .collect();
         let c = json!({"total":1,"done":0,"unit":50,"start":"2026-10-01","end":"2026-10-31",
-            "schedule":{},"completedLessons":lessons});
-        let r = forecast(&c, &json!([])).unwrap();
+            "schedule":{},"extras":extras});
+        let r = forecast(&c, &json!([]), d("2026-11-01")).unwrap();
         assert_eq!(r["complete"], true);
         assert_eq!(r["deficit"], 0.0);
     }

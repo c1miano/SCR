@@ -21,27 +21,24 @@
         result.missingCalendar.push(course.name);
         continue;
       }
-      // Disciplina com a carga cumprida continua na prévia, mas só com as aulas
-      // marcadas como ministradas (inclusive as dadas além dos 100%).
-      const complete = !!projection.complete;
-      if (complete) result.completed++;
+      if (projection.complete) result.completed++;
       // O cálculo completo é feito antes do recorte mensal: a carga não reinicia a cada mês.
-      const pending = projection.rows.filter((row) => !row.completed && row.credited > EPS);
-      const visible = projection.rows.filter((row) =>
-        complete ? row.completed : row.completed || row.credited > EPS,
-      );
-      for (const row of visible) {
+      // Aulas além da carga total só aparecem marcadas como "Aula a mais".
+      for (const row of projection.rows) {
+        if (!(row.credited > EPS || row.surplus)) continue;
         if (!row.day.startsWith(month + '-')) continue;
         result.entries.push({
           courseId: course.id,
           name: course.name,
           day: row.day,
-          minutes: row.completed ? row.minutes : row.credited,
+          minutes: row.surplus ? row.minutes : row.credited,
           plannedMinutes: row.minutes,
           unit: course.unit,
           extra: row.extra,
-          completed: row.completed,
-          final: !complete && !row.completed && projection.deficit <= EPS && row === pending.at(-1),
+          past: row.past,
+          review: row.review,
+          surplus: row.surplus,
+          final: !row.surplus && row.day === projection.finish,
         });
       }
     }
@@ -96,7 +93,7 @@
           list.push({
             day: x.date,
             kind: 'extra',
-            label: 'Aula extra',
+            label: 'Reposição',
             detail: course.name,
             courseId: course.id,
             hours: Number(x.hours) || 0,
@@ -120,7 +117,7 @@
         list.push({
           day: x.date,
           kind: 'extra',
-          label: 'Aula extra',
+          label: 'Reposição',
           detail: `${course.name} · ${person.name}`,
           courseId: course.id,
           hours: Number(x.hours) || 0,

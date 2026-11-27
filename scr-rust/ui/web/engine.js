@@ -108,7 +108,18 @@
   const EPS = 1e-6;
   const settle = (x) => (Math.abs(x) < EPS ? 0 : x);
 
-  function forecast(c, cal) {
+  const localToday = () => {
+    const now = new Date();
+    return pad(now.getFullYear(), 4) + '-' + pad(now.getMonth() + 1) + '-' + pad(now.getDate());
+  };
+
+  /**
+   * Previsão de uma disciplina na data de referência `today` (AAAA-MM-DD).
+   * Aulas previstas até `today` contam como dadas; `reviewLessons` (conferir)
+   * e `surplusLessons` (aula a mais, além da carga total) são marcações.
+   * Ver engine.rs.
+   */
+  function forecast(c, cal, today) {
     const start = date(text(get(c, 'start')));
     const end = date(text(get(c, 'end')));
     if (end < start || end - start > 1096) throw 'O calendário deve ter até três anos.';
@@ -118,20 +129,17 @@
     if (![45, 50, 60].includes(unit) || target <= 0 || baseline < 0 || baseline > target)
       throw 'Carga horária inválida.';
     const blocked = new Set(array(get(c, 'excluded')).map(text));
-    const completed = new Map();
-    for (const x of array(get(c, 'completedLessons'))) {
-      date(text(get(x, 'day')));
-      const m = num(get(x, 'minutes'));
-      if (m <= 0) throw 'Aula ministrada inválida.';
-      completed.set(text(get(x, 'day')), m);
-    }
-    const completedKeys = [...completed.keys()].sort(cmp);
-    const taught = completedKeys.reduce((sum, k) => sum + completed.get(k), 0);
-    const done = Math.min(target, baseline + taught);
-    const remaining = settle(Math.max(target - done, 0));
-    const rows = new Map();
+    const review = new Set(array(get(c, 'reviewLessons')).map(text));
+    const surplus = new Set(array(get(c, 'surplusLessons')).map(text));
+    const need = settle(Math.max(target - baseline, 0));
+    const rows = [];
     const extras = array(get(c, 'extras'));
     const entries = array(cal);
+    let sum = 0,
+      doneExtra = 0,
+      available = 0,
+      surplusTaught = 0,
+      finish = null;
     for (let d = start; ; d++) {
       const day = dayString(d);
       const sched = schedule(c, d);
@@ -142,36 +150,34 @@
       const extra = extras
         .filter((x) => text(get(x, 'date')) === day)
         .reduce((s, x) => s + num(get(x, 'hours')) * unit, 0);
-      const minutes = completed.has(day) ? completed.get(day) : (excluded ? 0 : regular) + extra;
-      if (minutes > 0)
-        rows.set(day, { day, minutes, completed: completed.has(day), extra: extra > 0 });
+      const minutes = (excluded ? 0 : regular) + extra;
+      if (minutes > 0) {
+        const past = day <= today;
+        const credited = Math.min(minutes, Math.max(need - sum, 0));
+        sum += credited;
+        if (need > 0 && sum >= need - EPS && finish === null) finish = day;
+        const beyond = settle(minutes - credited);
+        const marked = surplus.has(day) && beyond > 0;
+        if (past) {
+          doneExtra += credited;
+          if (marked) surplusTaught += beyond;
+        } else available += minutes;
+        rows.push({
+          day,
+          minutes,
+          extra: extra > 0,
+          past,
+          review: review.has(day),
+          surplus: marked,
+          credited,
+          beyond,
+          accumulated: Math.min(target, baseline + sum),
+        });
+      }
       if (d === end) break;
     }
-    for (const day of completedKeys)
-      if (!rows.has(day)) rows.set(day, { day, minutes: completed.get(day), completed: true, extra: false });
-    const ordered = [...rows.keys()].sort(cmp).map((k) => rows.get(k));
-    let sum = 0,
-      available = 0,
-      accumulated = baseline,
-      finish = null;
-    for (const row of ordered) {
-      const m = row.minutes;
-      let credited;
-      if (row.completed) credited = m;
-      else {
-        available += m;
-        credited = Math.min(m, Math.max(remaining - sum, 0));
-        sum += credited;
-        if (remaining > 0 && sum >= remaining - EPS && finish === null) finish = row.day;
-      }
-      accumulated = Math.min(target, accumulated + credited);
-      row.credited = credited;
-      row.accumulated = accumulated;
-    }
-    if (finish !== null && completedKeys.length) {
-      const last = completedKeys[completedKeys.length - 1];
-      if (last > finish) finish = last;
-    }
+    const done = Math.min(target, baseline + doneExtra);
+    const remaining = settle(Math.max(target - done, 0));
     return {
       remaining,
       available,
@@ -179,12 +185,77 @@
       finish,
       complete: remaining === 0,
       done,
-      taught,
-      rows: ordered,
+      surplusTaught,
+      rows,
     };
   }
 
-  function projectionsWithIssues(data) {
+  /** Disciplina pronta para o cálculo, ou null sem calendário com período (ver engine.rs). */
+  function prepare(data, course) {
+    const cal = array(get(data, 'calendars')).find((x) => same(get(x, 'id'), get(course, 'calendarId')));
+    if (!cal || text(get(cal, 'start')) === '' || text(get(cal, 'end')) === '') return null;
+    const c = JSON.parse(JSON.stringify(course));
+    c.gradeTurmas = gradeFor(data, get(course, 'id'));
+    c.start = cal.start;
+    c.end = cal.end;
+    const blocked = [...array(get(cal, 'entries'))];
+    const extras = [...array(get(c, 'extras'))];
+    for (const person of array(get(data, 'professors'))) {
+      if (!array(get(course, 'professorIds')).some((pid) => same(pid, get(person, 'id')))) continue;
+      blocked.push(...array(get(person, 'absences')));
+      for (const x of array(get(person, 'extras')))
+        if (same(get(x, 'courseId'), get(course, 'id')))
+          extras.push({
+            date: get(x, 'date') ?? null,
+            hours: (num(get(x, 'hours')) * num(get(x, 'unit'))) / num(get(c, 'unit')),
+          });
+    }
+    c.extras = extras;
+    return { c, blocked };
+  }
+
+  /**
+   * Converte as marcações "Ministrada" antigas (`completedLessons`): depois da
+   * carga total viram "Aula a mais"; as demais saem (a carga conta pela data).
+   * Marcação em data sem aula prevista vira aula extra. Ver engine.rs.
+   */
+  function migrate(data) {
+    const out = JSON.parse(JSON.stringify(data));
+    if (!Array.isArray(get(out, 'courses'))) return out;
+    out.courses = out.courses.map((course) => {
+      if (!isObject(course) || !('completedLessons' in course)) return course;
+      const lessons = array(course.completedLessons)
+        .map((x) => [text(get(x, 'day')), num(get(x, 'minutes'))])
+        .filter(([, m]) => m > 0)
+        .sort((a, b) => cmp(a[0], b[0]));
+      const unit = num(course.unit);
+      const target = num(course.total) * unit;
+      let planned = new Set();
+      const ready = prepare(data, course);
+      if (ready)
+        try {
+          planned = new Set(forecast(ready.c, ready.blocked, '9999-12-31').rows.map((r) => r.day));
+        } catch {
+          /* disciplina com cadastro inválido: sem datas previstas */
+        }
+      const surplus = [...array(course.surplusLessons)];
+      const extras = [...array(course.extras)];
+      let accumulated = num(course.done) * unit;
+      for (const [day, minutes] of lessons) {
+        if (accumulated >= target - EPS && !surplus.some((x) => text(x) === day)) surplus.push(day);
+        if (!planned.has(day) && unit > 0) extras.push({ date: day, hours: minutes / unit });
+        accumulated += minutes;
+      }
+      const next = { ...course };
+      delete next.completedLessons;
+      if (surplus.length) next.surplusLessons = surplus;
+      next.extras = extras;
+      return next;
+    });
+    return out;
+  }
+
+  function projectionsWithIssues(data, today = localToday()) {
     if (
       get(data, 'version') !== 4 ||
       !Array.isArray(get(data, 'courses')) ||
@@ -192,6 +263,7 @@
       !Array.isArray(get(data, 'professors'))
     )
       throw 'Arquivo SCR inválido (esperado formato versão 4).';
+    data = migrate(data);
     const result = {},
       issues = {},
       ids = new Set();
@@ -199,30 +271,13 @@
       const id = text(get(course, 'id'));
       if (id === '' || ids.has(id)) throw 'Identificador de disciplina inválido ou repetido.';
       ids.add(id);
-      const cal = data.calendars.find((x) => same(get(x, 'id'), get(course, 'calendarId')));
-      if (!cal || text(get(cal, 'start')) === '' || text(get(cal, 'end')) === '') {
+      const ready = prepare(data, course);
+      if (!ready) {
         result[id] = null;
         continue;
       }
-      const c = JSON.parse(JSON.stringify(course));
-      c.gradeTurmas = gradeFor(data, get(course, 'id'));
-      c.start = cal.start;
-      c.end = cal.end;
-      const blocked = [...array(get(cal, 'entries'))];
-      const extras = [...array(get(c, 'extras'))];
-      for (const person of data.professors) {
-        if (!array(get(course, 'professorIds')).some((pid) => same(pid, get(person, 'id')))) continue;
-        blocked.push(...array(get(person, 'absences')));
-        for (const x of array(get(person, 'extras')))
-          if (same(get(x, 'courseId'), get(course, 'id')))
-            extras.push({
-              date: get(x, 'date') ?? null,
-              hours: (num(get(x, 'hours')) * num(get(x, 'unit'))) / num(get(c, 'unit')),
-            });
-      }
-      c.extras = extras;
       try {
-        result[id] = forecast(c, blocked);
+        result[id] = forecast(ready.c, ready.blocked, today);
       } catch (e) {
         result[id] = null;
         issues[id] = String(e);
@@ -230,8 +285,8 @@
     }
     return { forecasts: result, issues };
   }
-  const projections = (data) => projectionsWithIssues(data).forecasts;
+  const projections = (data, today) => projectionsWithIssues(data, today).forecasts;
 
-  W.engine = { gradeFor, schedule, forecast, projections, projectionsWithIssues };
+  W.engine = { gradeFor, schedule, forecast, migrate, projections, projectionsWithIssues, localToday };
   if (typeof module !== 'undefined') module.exports = W;
 })(typeof globalThis !== 'undefined' ? globalThis : window);

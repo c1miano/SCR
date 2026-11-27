@@ -317,18 +317,6 @@ function validateCalendarPeriod(cal) {
     announce('Use um período de até três anos.');
     return false;
   }
-  const affected = data.courses.filter(
-    (c) =>
-      c.calendarId === cal.id && (c.completedLessons || []).some((x) => x.day < cal.start || x.day > cal.end),
-  );
-  if (affected.length) {
-    announce(
-      'O período deve incluir as aulas ministradas de: ' +
-        affected.map((c) => c.name).join(', ') +
-        '. Corrija as marcações antes de retirar essas datas.',
-    );
-    return false;
-  }
   return true;
 }
 async function updateCalendar(cal) {
@@ -498,24 +486,35 @@ function renderCourse() {
   }
   for (const x of rows) {
     const tr = $('#rows').insertRow();
-    tr.className = x.completed ? 'taught' : x.day === r.finish ? 'finish' : '';
+    // Além da carga total: só conta na prévia e no relatório se marcada como aula a mais.
+    const beyond = x.beyond > 1e-7 && x.credited <= 1e-7;
+    tr.className = [
+      x.past && !beyond ? 'taught' : '',
+      x.day === r.finish ? 'finish' : '',
+      beyond ? 'beyond' : '',
+      x.review ? 'review' : '',
+    ]
+      .filter(Boolean)
+      .join(' ');
     for (const text of [
       pretty(x.day),
       (x.day === r.finish ? '✓ Conclusão' : days[new Date(x.day + 'T12:00:00').getDay()]) +
-        (x.extra ? ' · Extra' : ''),
+        (x.extra ? ' · Extra' : '') +
+        (beyond ? ' · Além da carga' : ''),
       fmt(x.minutes / c.unit) + ' ' + unit,
       fmt(x.accumulated / c.unit) + ' ' + unit,
     ])
       tr.insertCell().textContent = text;
-    const label = document.createElement('label');
-    label.className = 'lesson-check';
-    const input = document.createElement('input');
-    input.type = 'checkbox';
-    input.checked = x.completed;
-    input.setAttribute('aria-label', 'Aula ministrada em ' + pretty(x.day));
-    input.onchange = () => setLessonCompleted(c.id, x.day, input.checked);
-    label.append(input, document.createTextNode(x.completed ? 'Sim' : 'Marcar'));
-    tr.insertCell().append(label);
+    const marks = document.createElement('div');
+    marks.className = 'lesson-marks';
+    marks.append(
+      lessonMark(c, x, 'reviewLessons', 'Conferir', x.review, 'O professor precisa conferir o registro de '),
+    );
+    if (x.beyond > 1e-7)
+      marks.append(
+        lessonMark(c, x, 'surplusLessons', 'Aula a mais', x.surplus, 'Mostrar como aula a mais em '),
+      );
+    tr.insertCell().append(marks);
   }
   $('#toggle').textContent = all ? 'Ver menos' : `Ver todos (${r.rows.length})`;
   $('#toggle').disabled = r.rows.length <= 6;
@@ -540,8 +539,10 @@ $('#form').onsubmit = async (e) => {
       schedule: {},
       professorIds: [...$('#course-professors').querySelectorAll('input:checked')].map((x) => x.value),
       groups: parseTags(f.elements.groups.value),
-      completedLessons: data.courses.find((x) => x.id === selected)?.completedLessons || [],
     };
+    // Marcações "Conferir" e "Aula a mais" continuam com a disciplina.
+    const previous = data.courses.find((x) => x.id === selected);
+    for (const key of ['reviewLessons', 'surplusLessons']) if (previous?.[key]) c[key] = previous[key];
     if (!hasPeriod(calendarFor(c))) throw Error('Selecione um calendário com início e fim definidos.');
     const period = coursePeriod(c);
     c.start = period.start;
@@ -552,10 +553,6 @@ $('#form').onsubmit = async (e) => {
       throw Error('Informe um período válido.');
     if ((new Date(c.end) - new Date(c.start)) / 86400000 > 1096)
       throw Error('Use um período de até três anos.');
-    if (c.completedLessons.some((x) => x.day < c.start || x.day > c.end))
-      throw Error(
-        'O período precisa incluir as aulas já ministradas. Desmarque-as antes de retirar essas datas do período.',
-      );
     for (let d = 0; d < 7; d++) c.schedule[d] = Number(f.elements['day' + d].value);
     c.excluded = [
       ...new Set(
@@ -618,11 +615,13 @@ $('#export').onclick = async () => {
     r = c ? forecast(c) : null;
   if (!r) return;
   const text =
-    '\uFEFFData;Carga prevista;Carga acumulada;Minutos por unidade;Ministrada\r\n' +
+    '\uFEFFData;Carga prevista;Carga acumulada;Minutos por unidade;Situação;Conferir;Aula a mais\r\n' +
     r.rows
       .map(
         (x) =>
-          `${pretty(x.day)};${fmt(x.minutes / c.unit)};${fmt(x.accumulated / c.unit)};${c.unit};${x.completed ? 'Sim' : 'Não'}`,
+          `${pretty(x.day)};${fmt(x.minutes / c.unit)};${fmt(x.accumulated / c.unit)};${c.unit};${
+            x.beyond > 1e-7 && x.credited <= 1e-7 ? 'Além da carga' : x.past ? 'Realizada' : 'Prevista'
+          };${x.review ? 'Sim' : 'Não'};${x.surplus ? 'Sim' : 'Não'}`,
       )
       .join('\r\n');
   try {
@@ -645,21 +644,36 @@ $('#course-calendar-link').onclick = () => {
 };
 show('home');
 
-async function setLessonCompleted(id, day, checked) {
-  const c = data.courses.find((x) => x.id === id),
-    r = forecast(c),
-    row = r?.rows.find((x) => x.day === day);
-  if (!row) return;
-  const lessons = (c.completedLessons || []).filter((x) => x.day !== day);
-  if (checked) lessons.push({ day, minutes: row.minutes });
-  const updated = { ...c, completedLessons: lessons };
+/** Caixa de marcação de uma aula ("Conferir" ou "Aula a mais"). */
+function lessonMark(c, row, field, text, checked, description) {
+  const label = document.createElement('label');
+  label.className = 'lesson-check';
+  const input = document.createElement('input');
+  input.type = 'checkbox';
+  input.checked = checked;
+  input.setAttribute('aria-label', description + pretty(row.day));
+  input.onchange = () => setLessonMark(c.id, row.day, field, input.checked);
+  label.append(input, document.createTextNode(text));
+  return label;
+}
+async function setLessonMark(id, day, field, checked) {
+  const c = data.courses.find((x) => x.id === id);
+  if (!c) return;
+  const days = (c[field] || []).filter((x) => x !== day);
+  if (checked) days.push(day);
+  days.sort();
+  const updated = { ...c, [field]: days };
   if (await commit({ ...data, courses: data.courses.map((x) => (x.id === id ? updated : x)) })) {
     renderCourse();
     renderHome();
     announce(
-      checked
-        ? 'Aula registrada como ministrada. Progresso atualizado.'
-        : 'Marcação desfeita. Progresso atualizado.',
+      field === 'reviewLessons'
+        ? checked
+          ? 'Aula marcada para o professor conferir o registro.'
+          : 'Marcação "Conferir" removida.'
+        : checked
+          ? 'Aula a mais marcada: aparece na prévia e no relatório.'
+          : 'Marcação "Aula a mais" removida.',
     );
   } else renderCourse();
 }

@@ -55,6 +55,14 @@
   --taught-text: #1e3a8a;
   --planned-soft: #f1f5f4;
   --planned-border: #cad8d5;
+  --review: #7c3aed;
+  --review-soft: #f3e8ff;
+  --review-border: #d8b4fe;
+  --review-text: #5b21b6;
+  --surplus: #0f766e;
+  --surplus-soft: #d5f5ef;
+  --surplus-border: #5eead4;
+  --surplus-text: #0f5650;
   --holiday: #a16207;
   --holiday-soft: #fef9c3;
   --holiday-border: #facc15;
@@ -105,6 +113,14 @@ html[data-theme='dark'] {
   --taught-text: #dbeafe;
   --planned-soft: #172624;
   --planned-border: #2c4642;
+  --review: #c4b5fd;
+  --review-soft: #2a1b47;
+  --review-border: #6d4bb3;
+  --review-text: #e9d5ff;
+  --surplus: #2dd4bf;
+  --surplus-soft: #113a35;
+  --surplus-border: #1f7a70;
+  --surplus-text: #99f6e4;
   --holiday: #facc15;
   --holiday-soft: #2e2608;
   --holiday-border: #8a6d0b;
@@ -1085,10 +1101,27 @@ table.lessons .lesson-check {
   min-height: 30px;
   padding: 3px 10px;
 }
-table.lessons tr.taught .lesson-check {
-  border-color: var(--taught-border);
-  background: var(--taught-soft);
-  color: var(--taught-text);
+/* Aula além da carga total: esmaecida até ser marcada como aula a mais. */
+table.lessons tr.beyond {
+  color: var(--text-muted);
+}
+table.lessons tr.review td:first-child {
+  box-shadow: inset 3px 0 0 var(--review);
+}
+.lesson-marks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+table.lessons .lesson-check:has(input[aria-label^='O professor']:checked) {
+  border-color: var(--review-border);
+  background: var(--review-soft);
+  color: var(--review-text);
+}
+table.lessons .lesson-check:has(input[aria-label^='Mostrar']:checked) {
+  border-color: var(--surplus-border);
+  background: var(--surplus-soft);
+  color: var(--surplus-text);
 }
 
 /* ---------- Progresso ---------- */
@@ -1519,6 +1552,24 @@ progress::-moz-progress-bar {
 .preview-lesson.is-completed small {
   color: var(--taught-text);
 }
+.preview-lesson.is-review {
+  background: var(--review-soft);
+  border-color: var(--review-border);
+  border-left-color: var(--review);
+  color: var(--review-text);
+}
+.preview-lesson.is-surplus {
+  background: var(--surplus-soft);
+  border-color: var(--surplus-border);
+  border-left-color: var(--surplus);
+  color: var(--surplus-text);
+}
+.preview-lesson.is-review span,
+.preview-lesson.is-review small,
+.preview-lesson.is-surplus span,
+.preview-lesson.is-surplus small {
+  color: inherit;
+}
 .preview-lesson.is-final {
   border-style: dashed;
   border-width: 2px;
@@ -1603,6 +1654,14 @@ button.preview-event:hover {
   border-color: var(--success);
   border-left-color: var(--success);
   color: var(--success-text);
+}
+.preview-legend .legend-review {
+  background: var(--review-soft);
+  border-color: var(--review-border);
+}
+.preview-legend .legend-surplus {
+  background: var(--surplus-soft);
+  border-color: var(--surplus-border);
 }
 .preview-legend .legend-holiday {
   background: var(--holiday-soft);
