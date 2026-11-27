@@ -65,7 +65,6 @@
   --radius: 10px;
   --radius-lg: 14px;
   --control-h: 40px;
-  --sidebar-w: 256px;
   --shadow-pop: 0 8px 24px rgb(15 43 40 / 0.1);
   --ease: cubic-bezier(0.2, 0, 0, 1);
   --dur: 160ms;
@@ -193,45 +192,95 @@ a {
   background: var(--primary-soft);
 }
 
-/* ---------- Estrutura ---------- */
+/* ---------- Estrutura: barra de navegação no topo ---------- */
 .app-shell {
-  display: grid;
-  grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
   min-height: 100vh;
-}
-.sidebar {
-  position: sticky;
-  top: 0;
-  height: 100vh;
-  overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 20px 14px 16px;
+}
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  height: 60px;
+  padding: 0 24px;
   background: var(--surface);
-  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
 }
 .brand {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 4px 8px 18px;
+  gap: 8px;
+  flex-shrink: 0;
+  padding: 4px;
   color: var(--text);
   text-decoration: none;
   border-radius: var(--radius-sm);
 }
-.brand-text {
-  display: grid;
-  line-height: 1.2;
-}
 .brand-text strong {
   font-family: var(--font-display);
-  font-size: 1.2rem;
+  font-size: 1.15rem;
   letter-spacing: 0.02em;
 }
-.brand-text small {
-  font-size: 0.8rem;
+.main-nav {
+  display: flex;
+  align-items: stretch;
+  align-self: stretch;
+  gap: 2px;
+  min-width: 0;
+}
+.main-nav button {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  border: 0;
+  background: transparent;
   color: var(--text-muted);
+  font: inherit;
+  font-size: 0.93rem;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    color var(--dur) var(--ease),
+    background var(--dur) var(--ease);
+}
+.main-nav button:hover {
+  color: var(--text);
+  background: var(--surface-2);
+}
+/* Tela atual: texto forte e traço na base da barra. */
+.main-nav button.active {
+  color: var(--text);
+  font-weight: 600;
+}
+.main-nav button.active::after {
+  content: '';
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: -1px;
+  height: 3px;
+  border-radius: 3px 3px 0 0;
+  background: var(--primary);
+}
+.main-nav button.active .icon {
+  color: var(--primary);
+}
+.nav-label-short {
+  display: none;
+}
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  flex-shrink: 0;
 }
 .aside-title {
   display: block;
@@ -240,89 +289,6 @@ a {
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--text-subtle);
-}
-.main-nav,
-#courses {
-  display: grid;
-  gap: 2px;
-}
-.main-nav button,
-.course-link,
-.tool-button {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  min-height: 38px;
-  padding: 8px 10px;
-  border: 0;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--text-muted);
-  font: inherit;
-  font-size: 0.93rem;
-  font-weight: 500;
-  text-align: left;
-  cursor: pointer;
-  transition:
-    background var(--dur) var(--ease),
-    color var(--dur) var(--ease);
-}
-.main-nav button:hover,
-.course-link:hover,
-.tool-button:hover {
-  background: var(--surface-2);
-  color: var(--text);
-}
-.main-nav button.active,
-.course-link.active {
-  background: var(--primary-soft);
-  color: var(--primary-soft-text);
-  font-weight: 600;
-}
-.main-nav button.active .icon {
-  color: var(--primary);
-}
-.sidebar > * {
-  flex-shrink: 0;
-}
-/* A lista de disciplinas ocupa o espaço livre e rola sozinha; as ferramentas
-   de backup ficam sempre visíveis no rodapé da barra lateral. */
-.sidebar > .nav-section {
-  flex: 1 1 auto;
-  min-height: 140px;
-  display: flex;
-  flex-direction: column;
-  margin-top: 18px;
-  padding-top: 16px;
-  border-top: 1px solid var(--border);
-}
-#courses {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow-y: auto;
-  align-content: start;
-  margin: 0 -4px;
-  padding: 0 4px;
-}
-.nav-section-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 4px 0 10px;
-  margin-bottom: 6px;
-}
-.course-link {
-  min-height: 34px;
-  padding: 6px 10px;
-  font-size: 0.89rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  display: block;
-}
-#no-courses {
-  padding: 4px 10px;
 }
 .icon-button {
   display: inline-grid;
@@ -350,18 +316,133 @@ a {
   width: 16px;
   height: 16px;
 }
+.menu-icon-button {
+  width: 40px;
+  height: 40px;
+}
+.menu-icon-button .icon {
+  width: 18px;
+  height: 18px;
+}
+.menu-icon-button:hover,
+.menu-icon-button[aria-expanded='true'] {
+  background: var(--surface-2);
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+.menu-button .chevron {
+  width: 16px;
+  height: 16px;
+  transition: rotate var(--dur) var(--ease);
+}
+.menu-button[aria-expanded='true'] .chevron {
+  rotate: 180deg;
+}
+.theme-label,
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Menus suspensos (Disciplinas e Seus dados) */
+.menu {
+  position: relative;
+}
+.menu-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 30;
+  display: grid;
+  gap: 10px;
+  width: 300px;
+  max-height: min(70vh, 560px);
+  padding: 12px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-pop);
+}
+.menu-panel[hidden] {
+  display: none;
+}
+.menu-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.small-button {
+  min-height: 32px;
+  padding: 4px 10px;
+  font-size: 0.87rem;
+}
+.small-button .icon {
+  width: 15px;
+  height: 15px;
+}
+#courses,
 .sidebar-tools {
-  margin-top: auto;
-  padding-top: 16px;
-  border-top: 1px solid var(--border);
   display: grid;
   gap: 2px;
 }
-.sidebar-tools .aside-title {
+.course-link,
+.tool-button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 38px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 0.93rem;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background var(--dur) var(--ease),
+    color var(--dur) var(--ease);
+}
+.course-link {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.course-link[hidden] {
+  display: none;
+}
+.course-link:hover,
+.tool-button:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+.course-link.active {
+  background: var(--primary-soft);
+  color: var(--primary-soft-text);
+  font-weight: 600;
+}
+#no-courses,
+#courses-no-match {
+  padding: 4px 10px;
+}
+.sidebar-tools .aside-title,
+.more-mobile-only .aside-title {
   padding: 0 10px 6px;
 }
+.more-mobile-only {
+  display: none;
+}
 .sidebar-note {
-  margin-top: 10px;
   padding: 10px 12px;
   border-radius: var(--radius-sm);
   background: var(--surface-2);
@@ -380,35 +461,9 @@ a {
   width: 15px;
   height: 15px;
 }
-
 .workspace {
+  flex: 1;
   min-width: 0;
-  display: flex;
-  flex-direction: column;
-}
-.topbar {
-  position: sticky;
-  top: 0;
-  z-index: 5;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  height: 56px;
-  padding: 0 32px;
-  background: color-mix(in srgb, var(--bg) 88%, transparent);
-  backdrop-filter: blur(8px);
-  border-bottom: 1px solid var(--border);
-}
-.breadcrumb {
-  display: flex;
-  gap: 8px;
-  font-size: 0.89rem;
-  color: var(--text-subtle);
-}
-#page-title {
-  color: var(--text);
-  font-weight: 600;
 }
 .theme-icon-light,
 html[data-theme='dark'] .theme-icon-dark {
@@ -1714,14 +1769,8 @@ table.grade td.filled select {
   }
 }
 @media (max-width: 960px) {
-  :root {
-    --sidebar-w: 216px;
-  }
   main {
     padding: 22px 20px 32px;
-  }
-  .topbar {
-    padding: 0 20px;
   }
   .onboarding {
     grid-template-columns: 1fr;
@@ -1731,9 +1780,6 @@ table.grade td.filled select {
   }
   .week {
     grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-  .brand-text small {
-    display: none;
   }
 }
 
@@ -1759,74 +1805,23 @@ table.grade td.filled select {
 main:focus {
   outline: none;
 }
-.menu-toggle {
-  display: none;
-}
 
-/* ---------- Celular e janelas estreitas ---------- */
-@media (max-width: 760px) {
-  .app-shell {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .sidebar {
-    position: fixed;
-    inset: 0 auto 0 0;
-    z-index: 40;
-    width: min(300px, 86vw);
-    height: 100dvh;
-    transform: translateX(-100%);
-    transition: transform 220ms var(--ease);
-  }
-  body.sidebar-open {
-    overflow: hidden;
-  }
-  body.sidebar-open .sidebar {
-    transform: none;
-    box-shadow: 0 0 40px rgb(0 0 0 / 0.25);
-  }
-  .brand-text small {
-    display: block;
-  }
-  .sidebar-backdrop {
-    position: fixed;
-    inset: 0;
-    z-index: 30;
-    background: rgb(0 0 0 / 0.45);
-  }
-  .menu-toggle {
-    display: inline-grid;
-    width: 40px;
-    height: 40px;
-    flex-shrink: 0;
-  }
-  .menu-toggle .icon {
-    width: 20px;
-    height: 20px;
-  }
+/* Janelas médias: navegação só com texto, para caber tudo na barra. */
+@media (max-width: 1080px) {
   .topbar {
-    padding: 0 12px;
-    gap: 10px;
+    gap: 12px;
+    padding: 0 16px;
   }
-  .breadcrumb {
-    flex: 1;
-    min-width: 0;
-  }
-  .breadcrumb > :not(#page-title) {
+  .main-nav .icon {
     display: none;
   }
-  #page-title {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+  .main-nav button {
+    padding: 0 10px;
   }
-  /* Só o ícone do tema; o texto continua como nome acessível. */
-  #theme-toggle {
-    width: 40px;
-    padding: 0;
-    justify-content: center;
-    flex-shrink: 0;
-  }
-  .theme-label {
+}
+@media (max-width: 900px) {
+  /* Só o ícone; o texto continua como nome acessível. */
+  .menu-button-label {
     position: absolute;
     width: 1px;
     height: 1px;
@@ -1834,8 +1829,83 @@ main:focus {
     clip-path: inset(50%);
     white-space: nowrap;
   }
+  .menu-button {
+    width: 40px;
+    padding: 0;
+    justify-content: center;
+  }
+  .menu-button .chevron {
+    display: none;
+  }
+}
+
+/* ---------- Celular: telas numa barra fixa embaixo ---------- */
+@media (max-width: 760px) {
+  .topbar {
+    height: 56px;
+    padding: 0 12px;
+  }
+  .main-nav {
+    position: fixed;
+    inset: auto 0 0 0;
+    z-index: 25;
+    height: calc(64px + env(safe-area-inset-bottom));
+    padding: 0 4px env(safe-area-inset-bottom);
+    gap: 0;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+  }
+  .main-nav button {
+    flex: 1 1 0;
+    min-width: 0;
+    flex-direction: column;
+    justify-content: center;
+    gap: 3px;
+    padding: 6px 2px;
+    font-size: 0.8rem;
+  }
+  .main-nav .icon {
+    display: block;
+    width: 22px;
+    height: 22px;
+  }
+  .main-nav button:hover {
+    background: transparent;
+  }
+  .main-nav button.active::after {
+    top: -1px;
+    bottom: auto;
+    left: 25%;
+    right: 25%;
+    border-radius: 0 0 3px 3px;
+  }
+  .nav-label {
+    display: none;
+  }
+  .nav-label-short {
+    display: block;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  /* No máximo cinco destinos embaixo; Relatórios fica no menu "⋯". */
+  #nav-reports {
+    display: none;
+  }
+  .more-mobile-only {
+    display: grid;
+    gap: 2px;
+  }
+  .menu-panel {
+    position: fixed;
+    top: 64px;
+    left: 8px;
+    right: 8px;
+    width: auto;
+    max-height: calc(100dvh - 64px - 80px - env(safe-area-inset-bottom));
+  }
   main {
-    padding: 16px 16px 28px;
+    padding: 16px 16px calc(88px + env(safe-area-inset-bottom));
   }
 }
 

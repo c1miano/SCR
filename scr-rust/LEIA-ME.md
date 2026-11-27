@@ -124,7 +124,8 @@ O calendário de registros e a grade da turma usam as cores e a tipografia da in
 
 Revisão guiada pelo checklist da skill UI/UX Pro Max (estilo Minimalismo/Swiss com paleta teal, que confirmou a direção visual atual):
 
-- **Celular (até 760px):** o menu lateral vira uma gaveta aberta pelo botão ☰ (fecha com Esc, com o fundo escurecido ou ao escolher uma tela; fechada, sai da ordem de foco). O botão de tema mostra só o ícone. Formulários ficam em uma coluna.
+- **Navegação no topo (sem barra lateral):** as telas ficam numa barra horizontal no topo, e o conteúdo usa a largura toda. **Disciplinas** abre um menu com busca (Enter abre a primeira encontrada) e o botão **Nova disciplina**. O botão **⋯** reúne exportar/importar backup, cópias automáticas e onde os dados ficam salvos. Os menus fecham com Esc, com clique fora ou ao escolher um item. Até 1080px a barra mostra só texto; até 900px, Disciplinas mostra só o ícone.
+- **Celular (até 760px):** as telas vão para uma barra fixa embaixo (Início, Prévia, Turmas, Calendários, Professores); Relatórios fica no menu ⋯. Formulários ficam em uma coluna.
 - **Até 640px:** tabelas viram cartões, um por linha, com o título de cada coluna, e a prévia mensal vira uma lista de dias (sem fins de semana vazios). Nenhuma tela tem rolagem horizontal em 375px.
 - **Contraste:** o texto secundário do tema claro passou a `#5a6d6a` (≥ 4,5:1 em todas as superfícies).
 - **Tamanho mínimo de texto:** 12px.

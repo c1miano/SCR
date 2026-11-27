@@ -720,33 +720,64 @@ function renderSemesterRegister(results) {
 }
 $('#filter-search').oninput = renderHome;
 
-// ---------- Menu lateral em telas estreitas (gaveta) ----------
-const narrowScreen = matchMedia('(max-width: 760px)');
-function setSidebar(open, restoreFocus = false) {
-  const sidebar = $('#sidebar'),
-    toggle = $('#menu-toggle');
-  const narrow = narrowScreen.matches;
-  open = open && narrow;
-  document.body.classList.toggle('sidebar-open', open);
-  // Fechada no celular, a gaveta sai da ordem de foco e do leitor de tela.
-  sidebar.inert = narrow && !open;
-  $('.sidebar-backdrop').hidden = !open;
-  toggle.setAttribute('aria-expanded', String(open));
-  toggle.setAttribute('aria-label', open ? 'Fechar menu' : 'Abrir menu');
-  if (open) sidebar.querySelector('.main-nav button')?.focus();
-  else if (restoreFocus) toggle.focus();
+// ---------- Menus da barra superior (Disciplinas e Seus dados) ----------
+const menus = [
+  [$('#courses-toggle'), $('#courses-panel')],
+  [$('#more-toggle'), $('#more-panel')],
+];
+function closeMenus(restoreFocusTo) {
+  for (const [toggle, panel] of menus) {
+    panel.hidden = true;
+    toggle.setAttribute('aria-expanded', 'false');
+  }
+  restoreFocusTo?.focus();
 }
-$('#menu-toggle').onclick = () => setSidebar(!document.body.classList.contains('sidebar-open'));
-$('.sidebar-backdrop').onclick = () => setSidebar(false, true);
+for (const [toggle, panel] of menus) {
+  toggle.onclick = () => {
+    const open = panel.hidden;
+    closeMenus();
+    if (!open) return;
+    panel.hidden = false;
+    toggle.setAttribute('aria-expanded', 'true');
+    if (panel.id === 'courses-panel') {
+      $('#courses-search').value = '';
+      filterCourseMenu();
+      $('#courses-search').focus();
+    } else panel.querySelector('button')?.focus();
+  };
+  // Escolher um item fecha o menu.
+  panel.addEventListener('click', (event) => {
+    if (event.target.closest('button')) closeMenus();
+  });
+}
+document.addEventListener('click', (event) => {
+  if (!event.target.closest('.menu')) closeMenus();
+});
 document.addEventListener('keydown', (event) => {
-  if (event.key === 'Escape' && document.body.classList.contains('sidebar-open')) setSidebar(false, true);
+  if (event.key !== 'Escape') return;
+  const open = menus.find(([, panel]) => !panel.hidden);
+  if (open) closeMenus(open[0]);
 });
-// Escolher um item do menu fecha a gaveta.
-$('#sidebar').addEventListener('click', (event) => {
-  if (narrowScreen.matches && event.target.closest('button, a')) setSidebar(false);
+// Itens do menu "⋯" que repetem uma tela da barra (no celular).
+for (const item of document.querySelectorAll('[data-go]'))
+  item.addEventListener('click', () => document.getElementById(item.dataset.go).click());
+
+function filterCourseMenu() {
+  const term = $('#courses-search').value.trim().toLocaleLowerCase('pt-BR');
+  let shown = 0;
+  for (const link of $('#courses').children) {
+    const match = !term || link.textContent.toLocaleLowerCase('pt-BR').includes(term);
+    link.hidden = !match;
+    if (match) shown++;
+  }
+  $('#courses-no-match').hidden = !data.courses.length || shown > 0;
+}
+$('#courses-search').oninput = filterCourseMenu;
+$('#courses-search').addEventListener('keydown', (event) => {
+  if (event.key !== 'Enter') return;
+  const first = [...$('#courses').children].find((link) => !link.hidden);
+  if (first) first.click();
 });
-narrowScreen.addEventListener('change', () => setSidebar(false));
-setSidebar(false);
 
 // ---------- Tabelas em cartões no celular ----------
 // Cada célula recebe o título da coluna (data-label); o CSS mostra uma linha
