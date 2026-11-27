@@ -156,6 +156,12 @@
     });
   }
 
+  /** Mesmo nome do main.rs (backup_name): scr-backup-2026-11-27_14h35.json, hora local. */
+  function backupName(d) {
+    const p = (n) => String(n).padStart(2, '0');
+    return `scr-backup-${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}_${p(d.getHours())}h${p(d.getMinutes())}.json`;
+  }
+
   // ---- Comandos (mesmos nomes e retornos do main.rs) ----
   let loadedRaw = null;
   const commands = {
@@ -187,7 +193,7 @@
     },
     async export_backup({ data }) {
       engine().projections(data);
-      return download('scr-backup.json', JSON.stringify(data, null, 2), 'application/json');
+      return download(backupName(new Date()), JSON.stringify(data, null, 2), 'application/json');
     },
     async import_backup() {
       const file = await pickFile();

@@ -175,12 +175,17 @@ fn save_data(data: Value, store: State<Store>) -> Result<Value, String> {
     let mut loaded = store.lock.lock().map_err(error)?;
     save_checked(&store.path, &data, &mut loaded)
 }
+/// Nome sugerido do backup com data e hora locais, em ordem cronológica e
+/// sem ":" (proibido em nomes de arquivo no Windows): scr-backup-2026-11-27_14h35.json.
+fn backup_name(now: chrono::NaiveDateTime) -> String {
+    now.format("scr-backup-%Y-%m-%d_%Hh%M.json").to_string()
+}
 #[tauri::command]
 async fn export_backup(data: Value) -> Result<bool, String> {
     engine::projections(&data)?;
     let file = rfd::AsyncFileDialog::new()
         .set_title("Exportar backup do SCR")
-        .set_file_name("scr-backup.json")
+        .set_file_name(backup_name(chrono::Local::now().naive_local()))
         .add_filter("Backup SCR", &["json"])
         .save_file()
         .await;
@@ -561,6 +566,14 @@ mod migration_tests {
             snapshot(&p).unwrap();
         }
         assert_eq!(fs::read(&p).unwrap(), before);
+    }
+    #[test]
+    fn backup_file_name_has_date_and_time() {
+        let at = chrono::NaiveDate::from_ymd_opt(2026, 11, 7)
+            .unwrap()
+            .and_hms_opt(9, 5, 30)
+            .unwrap();
+        assert_eq!(backup_name(at), "scr-backup-2026-11-07_09h05.json");
     }
     #[test]
     fn backup_retention_keeps_recent_and_one_per_week() {

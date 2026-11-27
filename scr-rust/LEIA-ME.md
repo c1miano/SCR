@@ -141,3 +141,7 @@ A marcação “Ministrada” foi removida. Agora:
 - As duas marcações ficam na tabela “O caminho até a conclusão” do cadastro da disciplina e são salvas na hora. O CSV traz as colunas Situação, Conferir e Aula a mais.
 - **Conversão automática dos dados antigos** (`completedLessons`): ao abrir o SCR ou importar um backup, as aulas que estavam marcadas como ministradas depois de atingida a carga total viram “Aula a mais”; as demais perdem a marca, pois passam a contar pela data. Uma marcação numa data sem aula prevista vira aula extra da disciplina, para não perder carga. A conversão é gravada no próximo salvamento. O mesmo código existe em `engine.rs` (`migrate`) e `ui/web/engine.js`.
 - `cargo test` cobre a regra pela data, as duas marcações, a conversão e o PDF; o modo `--verify <arquivo> [AAAA-MM-DD]` aceita a data de referência. Os PDFs gerados em Rust e em JS continuam idênticos byte a byte.
+
+## Nome do backup exportado
+
+**Exportar backup** sugere o nome com a data e a hora locais, por exemplo `scr-backup-2026-11-27_14h35.json` (ano primeiro, para os arquivos ficarem em ordem cronológica; “h” no lugar de “:”, que o Windows não aceita). Igual no aplicativo e na versão web.
